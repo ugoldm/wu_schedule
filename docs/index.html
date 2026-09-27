@@ -1057,14 +1057,19 @@ html&gt;body{padding:0}&lt;/style&gt;
   #wu-schedule-app .viz-grid { grid-template-columns: 1fr; }
   #wu-schedule-app .viz-controls { display: grid; grid-template-columns: 1fr; }
   .wu-nav { justify-content: flex-start; }
-  .wu-weekdays { display: none; }
-  .wu-calendar { display: grid; grid-template-columns: 1fr; border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
-  .wu-day { min-height: 0; padding: 10px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: start; border-right: 1px solid var(--border); }
-  .wu-day.is-outside, .wu-day.is-empty { display: none; }
-  .wu-day-number { width: auto; text-align: left; font-weight: 600; }
-  .wu-day-events { gap: 6px; overflow: visible; }
-  .wu-day-events .btn { min-height: 0; padding: 4px 6px; border-radius: 6px; background: color-mix(in srgb, var(--series-color) 16%, transparent); }
-  .wu-person-day + .wu-person-day { margin-top: 6px; }
+  .wu-weekdays span { padding: 6px 2px; }
+  .wu-weekdays { display: grid; }
+  .wu-calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-left: 1px solid var(--border); }
+  .wu-day { min-height: 82px; padding: 4px 3px; display: flex; border-right: 1px solid var(--border); }
+  .wu-day.is-outside, .wu-day.is-empty { display: flex; }
+  .wu-day-number { width: 100%; text-align: right; }
+  .wu-day-events { gap: 2px; overflow: hidden; }
+  .wu-day-events .btn { min-height: 0; padding: 2px 3px; border-radius: 4px; background: color-mix(in srgb, var(--series-color) 16%, transparent); }
+  .wu-person-day { gap: 2px; padding-left: 2px; border-left-width: 2px; }
+  .wu-person-day + .wu-person-day { margin-top: 2px; }
+  .wu-person-head { display: block; font-size: 9px; line-height: 1.1; }
+  .wu-person-name { display: block; }
+  .wu-person-count { display: none; }
   .wu-event-line { gap: 2px; align-items: center; }
   .wu-event-swatch { width: 3px; height: 12px; }
   .wu-event-text { display: block; overflow: hidden; }
