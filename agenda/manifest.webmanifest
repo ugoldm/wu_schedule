@@ -1,0 +1,40 @@
+{
+  "id": "./",
+  "name": "My WU Schedule",
+  "short_name": "WU Schedule",
+  "description": "Operational and semester schedule for WU Digital Economy.",
+  "lang": "en",
+  "start_url": "./index.html#agenda",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#eef2f7",
+  "theme_color": "#1769e0",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icons/agenda-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/agenda-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "url": "./index.html#agenda"
+    },
+    {
+      "name": "Semester planner",
+      "short_name": "Planner",
+      "url": "./index.html#planner"
+    }
+  ]
+}
