@@ -100,7 +100,7 @@
       cursor: pointer;
     }
     .button:hover { border-color: color-mix(in srgb, var(--primary) 48%, var(--line)); }
-    .button:focus-visible, .date-button:focus-visible, .event-card:focus-visible, .profile-card:focus-visible, .course-checkbox:focus-visible + label { outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; }
+    .button:focus-visible, .today-button:focus-visible, .date-button:focus-visible, .event-card:focus-visible, .profile-card:focus-visible, .course-checkbox:focus-visible + label { outline: 3px solid color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; }
     .button-primary { border-color: #1769e0; color: #fff; background: #1769e0; }
     .button-ghost { border-color: transparent; background: transparent; }
     .icon-button { width: 40px; padding: 0; }
@@ -119,15 +119,17 @@
       backdrop-filter: blur(18px);
     }
     .today-button { min-width: 42px; height: 48px; display: grid; place-items: center; padding: 0 8px; border: 0; border-radius: 12px; color: var(--primary); background: var(--primary-soft); font-size: 11px; font-weight: 760; cursor: pointer; }
-    .week-strip { display: grid; grid-template-columns: repeat(7, minmax(42px, 1fr)); gap: 3px; min-width: 0; }
+    .week-strip { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 18px) / 7); gap: 3px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
+    .week-strip::-webkit-scrollbar { display: none; }
     .date-button { min-width: 0; min-height: 48px; display: grid; place-items: center; gap: 1px; padding: 4px 1px; border: 0; border-radius: 11px; color: var(--muted); background: transparent; cursor: pointer; }
+    .date-button:nth-child(7n + 1) { scroll-snap-align: start; scroll-snap-stop: always; }
     .date-button span { font-size: 9px; font-weight: 720; letter-spacing: .04em; }
     .date-button strong { color: var(--text); font-size: 15px; }
     .date-button i { width: 4px; height: 4px; border-radius: 50%; background: transparent; }
     .date-button.has-events i { background: #e9893f; }
-    .date-button.is-selected { color: #fff; background: #1769e0; }
-    .date-button.is-selected strong { color: #fff; }
-    .date-button.is-selected i { background: #fff; }
+    .date-button.is-today { color: #fff; background: #1769e0; }
+    .date-button.is-today strong { color: #fff; }
+    .date-button.is-today i { background: #fff; }
 
     .agenda-layout { display: grid; gap: 0; }
     .agenda-summary { display: grid; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
@@ -137,8 +139,6 @@
     .next-card small { opacity: .78; }
     .next-card strong { font-size: 17px; line-height: 1.25; }
     .next-card-meta { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; }
-    .snapshot-status { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 11px; line-height: 1.4; }
-    .snapshot-status svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
 
     .agenda-feed { min-width: 0; padding: 4px 12px 40px; }
     .agenda-day { scroll-margin-top: calc(var(--header-height) + 78px); padding: 0 0 15px; }
@@ -283,8 +283,7 @@
 
     @media (max-width: 520px) {
       .week-bar { padding-inline: 6px; }
-      .week-strip { gap: 1px; }
-      .date-button { min-width: 0; }
+      .week-strip { grid-auto-columns: calc((100% - 6px) / 7); gap: 1px; }
       .dialog-hero { grid-template-columns: 1fr; }
       .detail-row { grid-template-columns: 22px minmax(0, 1fr); }
       .detail-label { grid-column: 2; }
@@ -364,13 +363,12 @@
     <section class="view" id="agenda-view" data-view="agenda" hidden>
       <div class="week-bar">
         <button class="today-button" id="today-button" type="button">Today</button>
-        <div class="week-strip" id="week-strip" aria-label="Visible week"></div>
+        <div class="week-strip" id="week-strip" aria-label="Current week"></div>
       </div>
       <div class="agenda-layout">
         <aside class="agenda-summary" aria-label="Schedule summary">
           <span class="summary-kicker">Next class</span>
           <div class="next-card" id="next-card"></div>
-          <div class="snapshot-status"><span data-icon="database"></span><span id="snapshot-status"></span></div>
         </aside>
         <div class="agenda-feed" id="agenda-feed"></div>
       </div>
@@ -515,6 +513,7 @@
       let visibleEvents = [];
       let currentView = 'agenda';
       let activeAgendaDate = null;
+      let displayedWeekStart = null;
       let agendaObserver = null;
       let plannerMonths = [];
       let plannerMonthIndex = 0;
@@ -598,16 +597,27 @@
         if (view === 'agenda' && DATA) requestAnimationFrame(() => focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false));
       }
 
-      function renderWeek(date) {
-        const monday = getMonday(date);
+      function renderWeekStrip(start, end) {
+        const today = getToday(DATA.timezone);
         const eventsByDate = new Set(visibleEvents.map(event => event.date));
-        document.querySelector('#week-strip').innerHTML = Array.from({ length: 7 }, (_, index) => {
-          const value = addDays(monday, index);
+        document.querySelector('#week-strip').innerHTML = datesBetween(getMonday(start), addDays(getMonday(end), 6)).map(value => {
           const parsed = parseDate(value);
           const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(parsed).slice(0, 3).toUpperCase();
-          return `<button class="date-button${value === date ? ' is-selected' : ''}${eventsByDate.has(value) ? ' has-events' : ''}" type="button" data-agenda-date="${value}" aria-label="${escapeHtml(dateFormatter.format(parsed))}"${value === date ? ' aria-current="date"' : ''}><span>${weekday}</span><strong>${parsed.getUTCDate()}</strong><i></i></button>`;
+          return `<button class="date-button${value === today ? ' is-today' : ''}${eventsByDate.has(value) ? ' has-events' : ''}" type="button" data-agenda-date="${value}" aria-label="${escapeHtml(dateFormatter.format(parsed))}"${value === today ? ' aria-current="date"' : ''}><span>${weekday}</span><strong>${parsed.getUTCDate()}</strong><i></i></button>`;
         }).join('');
         document.querySelectorAll('[data-agenda-date]').forEach(button => button.addEventListener('click', () => focusAgendaDate(button.dataset.agendaDate, true)));
+        displayedWeekStart = null;
+      }
+
+      function scrollWeekIntoView(date, smooth = true) {
+        const weekStart = getMonday(date);
+        if (displayedWeekStart === weekStart) return;
+        const strip = document.querySelector('#week-strip');
+        const firstDay = strip.querySelector(`[data-agenda-date="${weekStart}"]`);
+        if (!firstDay || strip.clientWidth === 0) return;
+        const left = firstDay.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+        displayedWeekStart = weekStart;
+        strip.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
       }
 
       function renderEventCard(event) {
@@ -644,22 +654,21 @@
         if (!DATA) return;
         updateVisibleEvents();
         const today = getToday(DATA.timezone);
-        let start = DATA.date_min;
-        let end = DATA.date_max;
-        if (today < start) start = today;
-        if (today > end) end = today;
+        let start = getMonday(DATA.date_min);
+        let end = addDays(getMonday(DATA.date_max), 6);
+        const currentWeekStart = getMonday(today);
+        if (today < start) start = currentWeekStart;
+        if (today > end) end = addDays(currentWeekStart, 6);
         const byDate = Object.groupBy ? Object.groupBy(visibleEvents, event => event.date) : visibleEvents.reduce((result, event) => ((result[event.date] ||= []).push(event), result), {});
         document.querySelector('#agenda-feed').innerHTML = datesBetween(start, end).map(date => {
           const entries = byDate[date] || [];
-          const next = visibleEvents.find(event => event.date > date);
-          const emptyText = next ? `No classes · next class ${dateFormatter.format(parseDate(next.date))} at ${next.start_time}` : 'No classes';
-          return `<section class="agenda-day" id="agenda-${date}" data-day-date="${date}"><h2 class="day-heading"><time datetime="${date}">${escapeHtml(dateFormatter.format(parseDate(date)))}</time>${date === today ? '<span class="today-label">Today</span>' : ''}</h2><div class="day-events">${entries.length ? entries.map(renderEventCard).join('') : `<div class="empty-day">${escapeHtml(emptyText)}</div>`}</div></section>`;
+          return `<section class="agenda-day" id="agenda-${date}" data-day-date="${date}"><h2 class="day-heading"><time datetime="${date}">${escapeHtml(dateFormatter.format(parseDate(date)))}</time>${date === today ? '<span class="today-label">Today</span>' : ''}</h2><div class="day-events">${entries.length ? entries.map(renderEventCard).join('') : '<div class="empty-day">No classes</div>'}</div></section>`;
         }).join('');
         document.querySelectorAll('[data-event-id]').forEach(button => button.addEventListener('click', () => showEvent(button.dataset.eventId)));
         activeAgendaDate = activeAgendaDate && document.querySelector(`#agenda-${activeAgendaDate}`) ? activeAgendaDate : today;
-        renderWeek(activeAgendaDate);
+        renderWeekStrip(start, end);
+        requestAnimationFrame(() => scrollWeekIntoView(activeAgendaDate, false));
         renderNextCard();
-        document.querySelector('#snapshot-status').textContent = `Saved WU snapshot · generated ${formatGenerated(DATA.generated)} · no live updates in this MVP.`;
         setupAgendaObserver();
         if (anchorToday && currentView === 'agenda') requestAnimationFrame(() => focusToday(false));
       }
@@ -670,7 +679,10 @@
           const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
           if (!visible) return;
           const date = visible.target.dataset.dayDate;
-          if (date !== activeAgendaDate) { activeAgendaDate = date; renderWeek(date); }
+          if (date !== activeAgendaDate) {
+            activeAgendaDate = date;
+            scrollWeekIntoView(date, true);
+          }
         }, { rootMargin: '-145px 0px -65% 0px', threshold: 0 });
         document.querySelectorAll('[data-day-date]').forEach(section => agendaObserver.observe(section));
       }
@@ -679,7 +691,7 @@
         const section = document.querySelector(`#agenda-${date}`);
         if (!section) return;
         activeAgendaDate = date;
-        renderWeek(date);
+        scrollWeekIntoView(date, smooth);
         section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
       }
 

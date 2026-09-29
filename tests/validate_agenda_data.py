@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_PATH = ROOT / "docs" / "agenda" / "data" / "schedule.json"
+DATA_PATH = ROOT / "docs" / "data" / "schedule.json"
 
 
 class AgendaSnapshotTests(unittest.TestCase):
