@@ -308,6 +308,7 @@
 
     @media (max-width: 780px) {
       .app-main { overflow-x: clip; }
+      .view { transform: translate3d(0, 0, 0); backface-visibility: hidden; }
       .agenda-layout { display: block; }
       .agenda-summary { position: sticky; top: calc(var(--header-height) + 67px); z-index: 15; }
       .day-heading { top: calc(var(--header-height) + 67px + var(--agenda-summary-height, 0px)); }
@@ -422,7 +423,6 @@
         </aside>
         <div class="agenda-feed" id="agenda-feed"></div>
       </div>
-      <button class="today-button" id="today-button" type="button" aria-label="Go to today">Today</button>
     </section>
 
     <section class="view section-page" id="planner-view" data-view="planner" hidden>
@@ -468,6 +468,8 @@
 
     <div class="fatal-error" id="fatal-error" hidden><div><strong>Schedule unavailable</strong><span id="fatal-message">The saved data could not be loaded.</span></div></div>
   </main>
+
+  <button class="today-button" id="today-button" type="button" aria-label="Go to today" hidden>Today</button>
 
   <nav class="bottom-nav" aria-label="Primary navigation">
     <button class="nav-button" type="button" data-view-button="agenda" aria-current="page"><span data-icon="agenda"></span>Agenda</button>
@@ -645,6 +647,7 @@
           if (button.dataset.viewButton === view) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
         });
         document.querySelector('#page-title').textContent = pageTitles[view];
+        document.querySelector('#today-button').hidden = view !== 'agenda';
         if (updateHash) history.replaceState(null, '', `#${view}`);
         const position = restoreScroll ?? viewScrollPositions[view];
         if (position === undefined && view === 'agenda' && DATA) {
@@ -671,10 +674,9 @@
         let dragFrame = null;
         let settling = false;
         let generation = 0;
-        let floatingButton = null;
         let previewScrollY = 0;
 
-        function clearPreview() {
+        function clearPreview(committedView = null) {
           const hadPreview = Boolean(draggedView);
           generation++;
           main.classList.remove('is-swiping');
@@ -687,22 +689,17 @@
             draggedView.style.removeProperty('will-change');
           }
           if (neighbor) {
-            neighbor.hidden = true;
+            if (neighborName !== committedView) neighbor.hidden = true;
             neighbor.inert = false;
             neighbor.removeAttribute('aria-hidden');
             neighbor.classList.remove('swipe-neighbor');
             ['top', 'transform', 'will-change'].forEach(property => neighbor.style.removeProperty(property));
           }
-          if (floatingButton) {
-            document.querySelector('[data-view="agenda"]').append(floatingButton);
-            floatingButton.hidden = false;
-            floatingButton = null;
-          }
           draggedView = neighbor = null;
           neighborName = null;
           dragOffset = 0;
           settling = false;
-          if (hadPreview) window.scrollTo({ top: previewScrollY, behavior: 'instant' });
+          if (hadPreview && !committedView) window.scrollTo({ top: previewScrollY, behavior: 'instant' });
         }
 
         function preparePreview(dx) {
@@ -721,18 +718,11 @@
               neighbor = document.querySelector(`[data-view="${next}"]`);
               neighbor.classList.add('swipe-neighbor');
               neighbor.style.top = `${previewScrollY - (viewScrollPositions[next] || 0)}px`;
+              neighbor.style.transform = `translate3d(${nextDirection * main.clientWidth}px, 0, 0)`;
               neighbor.style.willChange = 'transform';
               neighbor.inert = true;
               neighbor.setAttribute('aria-hidden', 'true');
               neighbor.hidden = false;
-            }
-            // A transformed view would otherwise move its fixed Today button offscreen.
-            if (currentView === 'agenda' || next === 'agenda') {
-              floatingButton = document.querySelector('#today-button');
-              if (floatingButton) {
-                floatingButton.hidden = currentView !== 'agenda';
-                main.append(floatingButton);
-              }
             }
           }
           const width = main.clientWidth;
@@ -742,8 +732,8 @@
 
         function paintPreview() {
           if (!draggedView) return;
-          draggedView.style.transform = `translateX(${dragOffset}px)`;
-          if (neighbor) neighbor.style.transform = `translateX(${direction * main.clientWidth + dragOffset}px)`;
+          draggedView.style.transform = `translate3d(${dragOffset}px, 0, 0)`;
+          if (neighbor) neighbor.style.transform = `translate3d(${direction * main.clientWidth + dragOffset}px, 0, 0)`;
         }
 
         function settlePreview(commit = false) {
@@ -758,14 +748,18 @@
           const width = main.clientWidth;
           const finish = () => {
             if (token !== generation) return;
-            // Hide the outgoing view and restore the incoming layout in the same frame.
-            clearPreview();
-            if (next) activateView(next, true, restoreScroll, false);
+            if (!next) { clearPreview(); return; }
+            // Keep the incoming DOM and compositor layer visible while restoring
+            // its normal layout. Hiding and revealing it resets Safari's sticky layers.
+            neighbor.classList.remove('swipe-neighbor');
+            neighbor.style.removeProperty('top');
+            activateView(next, true, restoreScroll, false);
+            clearPreview(next);
           };
           if (reducedMotion.matches || !draggedView.animate) { finish(); return; }
           const animate = (view, from, to) => view.animate([
-            { transform: `translateX(${from}px)` },
-            { transform: `translateX(${to}px)` }
+            { transform: `translate3d(${from}px, 0, 0)` },
+            { transform: `translate3d(${to}px, 0, 0)` }
           ], { duration: 280, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'forwards' });
           transitions = [animate(draggedView, dragOffset, next ? -direction * width : 0)];
           if (neighbor) transitions.push(animate(neighbor, direction * width + dragOffset, next ? 0 : direction * width));

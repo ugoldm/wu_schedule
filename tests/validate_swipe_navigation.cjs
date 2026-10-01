@@ -27,6 +27,14 @@ function fixture() {
     };
   }
   const views = ['agenda', 'planner', 'settings'].map(view => element({ view }));
+  views.forEach(view => {
+    let hidden = true;
+    view.hiddenChanges = [];
+    Object.defineProperty(view, 'hidden', {
+      get() { return hidden; },
+      set(value) { hidden = value; view.hiddenChanges.push(value); }
+    });
+  });
   views[0].hidden = false;
   const buttons = views.map(view => element({ viewButton: view.dataset.view }));
   const main = element(); main.clientWidth = 390;
@@ -41,6 +49,7 @@ function fixture() {
         if (selector === '.app-main') return main;
         if (selector === 'dialog[open]') return context.dialog;
         if (selector === '#page-title') return title;
+        if (selector === '#today-button') return todayButton;
         return views.find(view => selector === `[data-view="${view.dataset.view}"]`);
       },
       querySelectorAll(selector) { return selector === '[data-view]' ? views : buttons; }
@@ -58,6 +67,7 @@ function fixture() {
     getToday() { return '2026-10-01'; }, focusAgendaDate() {}
   };
   const title = element();
+  const todayButton = element();
   vm.createContext(context);
   vm.runInContext(source + '\nsetupViewSwipes();', context);
   const touch = (x, y = 240) => ({ identifier: 1, clientX: x, clientY: y });
@@ -82,17 +92,17 @@ function fixture() {
     assert.equal(t.views[1].hidden, false);
     assert.equal(t.views[1].inert, true);
     assert.equal(t.views[1].getAttribute('aria-hidden'), 'true');
-    assert.equal(t.views[0].style.transform, 'translateX(-120px)');
-    assert.equal(t.views[1].style.transform, 'translateX(270px)');
+    assert.equal(t.views[0].style.transform, 'translate3d(-120px, 0, 0)');
+    assert.equal(t.views[1].style.transform, 'translate3d(270px, 0, 0)');
     assert.equal(t.views[1].style.top, '120px');
     t.end(180);
     assert.equal(t.views[0].hidden, false);
     assert.equal(t.views[1].hidden, false);
     assert.equal(t.context.currentView, 'agenda');
-    assert.equal(t.animations[0].keyframes[0].transform, 'translateX(-120px)');
-    assert.equal(t.animations[0].keyframes[1].transform, 'translateX(-390px)');
-    assert.equal(t.animations[1].keyframes[0].transform, 'translateX(270px)');
-    assert.equal(t.animations[1].keyframes[1].transform, 'translateX(0px)');
+    assert.equal(t.animations[0].keyframes[0].transform, 'translate3d(-120px, 0, 0)');
+    assert.equal(t.animations[0].keyframes[1].transform, 'translate3d(-390px, 0, 0)');
+    assert.equal(t.animations[1].keyframes[0].transform, 'translate3d(270px, 0, 0)');
+    assert.equal(t.animations[1].keyframes[1].transform, 'translate3d(0px, 0, 0)');
     await t.finish();
     assert.equal(t.context.currentView, 'planner');
     assert.equal(t.context.hash, '#planner');
@@ -107,8 +117,8 @@ function fixture() {
   await test('cancel returns both panels without changing the selected tab', async t => {
     t.start(); t.move(275); t.end(275);
     assert.equal(t.views[1].hidden, false);
-    assert.equal(t.animations[0].keyframes[1].transform, 'translateX(0px)');
-    assert.equal(t.animations[1].keyframes[1].transform, 'translateX(390px)');
+    assert.equal(t.animations[0].keyframes[1].transform, 'translate3d(0px, 0, 0)');
+    assert.equal(t.animations[1].keyframes[1].transform, 'translate3d(390px, 0, 0)');
     await t.finish();
     assert.equal(t.context.currentView, 'agenda');
     assert.equal(t.views[1].hidden, true);
@@ -120,7 +130,7 @@ function fixture() {
     t.start(90); t.move(220);
     assert.equal(t.views[0].hidden, false);
     assert.equal(t.views[0].style.top, '-55px');
-    assert.equal(t.views[0].style.transform, 'translateX(-260px)');
+    assert.equal(t.views[0].style.transform, 'translate3d(-260px, 0, 0)');
     t.end(220); await t.finish();
     assert.equal(t.context.currentView, 'agenda');
     assert.equal(t.context.window.scrollY, 120);
@@ -139,6 +149,18 @@ function fixture() {
       assert.equal(t.context.window.scrollY, 1940);
       assert.equal(t.context.currentView, 'agenda');
     }
+  });
+  await test('Planner to Agenda commit never hides the incoming page again', async t => {
+    t.context.activateView('planner');
+    t.context.viewScrollPositions.agenda = 1940;
+    t.start(90); t.move(220);
+    t.views[0].hiddenChanges = [];
+    t.end(220); await t.finish();
+    assert.equal(t.views[0].hiddenChanges.includes(true), false);
+    assert.equal(t.views[0].hidden, false);
+    assert.equal(t.context.window.scrollY, 1940);
+    assert.equal(t.views[0].style.transform, undefined);
+    assert.equal(t.views[0].style.top, undefined);
   });
   await test('button navigation restores offsets without queued date scrolling', async t => {
     let dateFocuses = 0;
@@ -161,7 +183,7 @@ function fixture() {
     t.move(280);
     assert.equal(t.views[2].hidden, true);
     assert.equal(t.views[0].hidden, false);
-    assert.equal(t.views[0].style.transform, 'translateX(-310px)');
+    assert.equal(t.views[0].style.transform, 'translate3d(-310px, 0, 0)');
     t.end(280); await t.finish();
     assert.equal(t.context.currentView, 'agenda');
   });

@@ -34,6 +34,7 @@ function fixture(initialTab) {
         if (selector === '.agenda-summary') return summary;
         if (selector === '#loading-state') return loading;
         if (selector === '#page-title') return title;
+        if (selector === '#today-button') return todayButton;
         if (selector === '#agenda-2026-10-01') return today;
         throw new Error(`Unexpected selector ${selector}`);
       },
@@ -61,6 +62,7 @@ function fixture(initialTab) {
     }
   };
   const title = {};
+  const todayButton = {};
   today.scrollIntoView = options => {
     focused.push({ options, beforeReveal: classes.has('is-initializing') });
     context.window.scrollY = 900;
