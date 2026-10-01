@@ -649,10 +649,41 @@
         let gesture = null;
         let suppressClickUntil = 0;
         let transition = null;
+        let draggedView = null;
+        let dragOffset = 0;
+        let dragFrame = null;
+
+        function animateView(view, from) {
+          if (transition) transition.cancel();
+          if (reducedMotion.matches || !view.animate || !from) return;
+          transition = view.animate([
+            { transform: `translateX(${from}px)` },
+            { transform: 'translateX(0)' }
+          ], { duration: 300, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+        }
+
+        function resetDrag(smooth = true) {
+          if (dragFrame !== null) cancelAnimationFrame(dragFrame);
+          dragFrame = null;
+          if (!draggedView) return;
+          const view = draggedView;
+          const offset = dragOffset;
+          view.style.removeProperty('transform');
+          view.style.removeProperty('will-change');
+          draggedView = null;
+          dragOffset = 0;
+          if (smooth) animateView(view, offset);
+        }
+
+        function cancelGesture() {
+          gesture = null;
+          resetDrag();
+        }
 
         // Leave the date strip, form controls and screen-edge system gestures alone.
         main.addEventListener('touchstart', event => {
-          gesture = null;
+          cancelGesture();
+          if (transition) transition.cancel();
           suppressClickUntil = 0;
           if (!mobile.matches || !DATA || event.touches.length !== 1 || document.querySelector('dialog[open]')) return;
           if (event.target.closest('.week-strip, input, select, textarea, label, a, [contenteditable], [data-no-swipe]')) return;
@@ -664,7 +695,7 @@
         main.addEventListener('touchmove', event => {
           if (!gesture) return;
           if (!mobile.matches || event.touches.length !== 1 || currentView !== gesture.view || document.querySelector('dialog[open]')) {
-            gesture = null;
+            cancelGesture();
             return;
           }
           const touch = event.touches[0];
@@ -672,18 +703,34 @@
           const dy = touch.clientY - gesture.y;
           if (!gesture.axis) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) < 12) return;
-            if (Math.abs(dx) <= Math.abs(dy) * 1.4) { gesture = null; return; }
+            if (Math.abs(dx) <= Math.abs(dy) * 1.4) { cancelGesture(); return; }
             gesture.axis = 'horizontal';
           }
           // Stop scrolling and card taps only after horizontal intent is clear.
-          if (!event.cancelable) { gesture = null; return; }
+          if (!event.cancelable) { cancelGesture(); return; }
           event.preventDefault();
           suppressClickUntil = performance.now() + 500;
+          if (reducedMotion.matches) return;
+          if (!draggedView) {
+            draggedView = document.querySelector(`[data-view="${currentView}"]`);
+            draggedView.style.willChange = 'transform';
+          }
+          const direction = dx < 0 ? 1 : -1;
+          const hasNext = Boolean(views[views.indexOf(currentView) + direction]);
+          // Resistance keeps the first/last tab from feeling like a dead end.
+          const limit = window.innerWidth * (hasNext ? .35 : .1);
+          dragOffset = Math.sign(dx) * limit * (1 - Math.exp(-Math.abs(dx) / limit));
+          if (dragFrame === null) dragFrame = requestAnimationFrame(() => {
+            dragFrame = null;
+            if (draggedView) draggedView.style.transform = `translateX(${dragOffset}px)`;
+          });
         }, { passive: false });
 
         main.addEventListener('touchend', event => {
           const completed = gesture;
           gesture = null;
+          const offset = dragOffset;
+          resetDrag();
           if (!completed || completed.axis !== 'horizontal') return;
           suppressClickUntil = performance.now() + 500;
           if (event.cancelable) event.preventDefault();
@@ -699,18 +746,15 @@
           const direction = dx < 0 ? 1 : -1;
           const next = views[views.indexOf(currentView) + direction];
           if (!next) return;
-          if (transition) transition.cancel();
           activateView(next);
           const view = document.querySelector(`[data-view="${next}"]`);
-          if (!reducedMotion.matches && view.animate) {
-            transition = view.animate([
-              { transform: `translateX(${direction * 18}%)`, opacity: .6 },
-              { transform: 'translateX(0)', opacity: 1 }
-            ], { duration: 220, easing: 'cubic-bezier(.22, 1, .36, 1)' });
-          }
+          animateView(view, direction * Math.max(48, Math.abs(offset)));
         }, { passive: false });
 
-        main.addEventListener('touchcancel', () => { gesture = null; }, { passive: true });
+        main.addEventListener('touchcancel', cancelGesture, { passive: true });
+        window.addEventListener('resize', cancelGesture);
+        window.addEventListener('hashchange', cancelGesture);
+        document.querySelectorAll('[data-view-button]').forEach(button => button.addEventListener('click', cancelGesture, true));
         main.addEventListener('click', event => {
           if (performance.now() >= suppressClickUntil || event.detail === 0) return;
           event.preventDefault();
