@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wu-operational-schedule-';
-const CACHE_NAME = `${CACHE_PREFIX}v17`;
+const CACHE_NAME = `${CACHE_PREFIX}v18`;
 const PRECACHE = [
   './index.html',
   './manifest.webmanifest',

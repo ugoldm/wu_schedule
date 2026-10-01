@@ -38,7 +38,7 @@
     }
 
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; background: var(--bg); }
+    html { scroll-behavior: auto; background: var(--bg); }
     body { margin: 0; min-width: 320px; color: var(--text); background: var(--bg); }
     button, select, input { font: inherit; }
     button, a { -webkit-tap-highlight-color: transparent; }
@@ -81,7 +81,8 @@
     }
     .desktop-nav { display: none; }
 
-    .app-main { position: relative; width: min(100%, 1360px); margin: 0 auto; padding: 0 0 calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 18px); }
+    .app-main { position: relative; overflow-anchor: none; width: min(100%, 1360px); margin: 0 auto; padding: 0 0 calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 18px); }
+    .app-main.is-initializing .view { visibility: hidden; }
     .swipe-neighbor { position: absolute; left: 0; width: 100%; pointer-events: none; background: var(--bg); }
     .view { min-height: calc(100dvh - var(--header-height) - var(--bottom-nav-height)); }
     .loading, .fatal-error { display: grid; place-items: center; min-height: 60dvh; padding: 32px; text-align: center; color: var(--muted); }
@@ -223,6 +224,9 @@
     .planner-layout { display: grid; gap: 18px; }
     .planner-panel { min-width: 0; }
     .planner-metrics { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+    .planner-person-metrics { flex: 1 1 300px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .planner-person-metrics h2 { margin: 0 0 8px; font-size: 14px; color: var(--person-color); }
+    .planner-person-metrics .planner-metrics { margin-bottom: 0; }
     .metric { padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--surface); font-size: 11px; }
     .metric strong { color: var(--text); }
     .weekday-row, .month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -360,7 +364,9 @@
       .section-page { padding: 28px 24px 60px; }
       .planner-layout { grid-template-columns: minmax(0, 1fr); }
       .month-day { min-height: 132px; padding: 6px; }
-      .month-event { font-size: 10px; }
+      .month-events { align-content: start; gap: 4px; }
+      .month-event { padding: 6px; font-size: 13px; line-height: 1.2; }
+      .month-event span { font-size: 11px; }
       .settings-grid { grid-template-columns: minmax(0, 1fr) minmax(300px, .7fr); align-items: start; }
       .settings-section:first-child { grid-column: 1 / -1; }
       .profile-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -402,7 +408,7 @@
     </select>
   </header>
 
-  <main class="app-main" id="app-main">
+  <main class="app-main is-initializing" id="app-main">
     <div class="loading" id="loading-state">Loading the saved WU schedule…</div>
 
     <section class="view" id="agenda-view" data-view="agenda" hidden>
@@ -630,9 +636,9 @@
         renderAgenda(true);
       }
 
-      function activateView(view, updateHash = true, restoreScroll = null) {
+      function activateView(view, updateHash = true, restoreScroll = null, saveScroll = true) {
         if (!pageTitles[view]) view = 'agenda';
-        if (view !== currentView && DATA) viewScrollPositions[currentView] = window.scrollY;
+        if (saveScroll && view !== currentView && DATA) viewScrollPositions[currentView] = window.scrollY;
         currentView = view;
         document.querySelectorAll('[data-view]').forEach(element => { element.hidden = element.dataset.view !== view; });
         document.querySelectorAll('[data-view-button]').forEach(button => {
@@ -640,8 +646,13 @@
         });
         document.querySelector('#page-title').textContent = pageTitles[view];
         if (updateHash) history.replaceState(null, '', `#${view}`);
-        window.scrollTo({ top: restoreScroll ?? 0, behavior: 'instant' });
-        if (restoreScroll === null && view === 'agenda' && DATA) requestAnimationFrame(() => focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false));
+        const position = restoreScroll ?? viewScrollPositions[view];
+        if (position === undefined && view === 'agenda' && DATA) {
+          focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false);
+          viewScrollPositions.agenda = window.scrollY;
+        } else {
+          window.scrollTo({ top: position ?? 0, behavior: 'instant' });
+        }
       }
 
       function setupViewSwipes() {
@@ -661,8 +672,10 @@
         let settling = false;
         let generation = 0;
         let floatingButton = null;
+        let previewScrollY = 0;
 
         function clearPreview() {
+          const hadPreview = Boolean(draggedView);
           generation++;
           main.classList.remove('is-swiping');
           transitions.forEach(animation => animation.cancel());
@@ -689,6 +702,7 @@
           neighborName = null;
           dragOffset = 0;
           settling = false;
+          if (hadPreview) window.scrollTo({ top: previewScrollY, behavior: 'instant' });
         }
 
         function preparePreview(dx) {
@@ -697,6 +711,8 @@
           if (draggedView && (direction !== nextDirection || neighborName !== (next || null))) clearPreview();
           direction = nextDirection;
           if (!draggedView) {
+            previewScrollY = gesture?.scrollY ?? window.scrollY;
+            viewScrollPositions[currentView] = previewScrollY;
             main.classList.add('is-swiping');
             draggedView = document.querySelector(`[data-view="${currentView}"]`);
             draggedView.style.willChange = 'transform';
@@ -704,7 +720,7 @@
               neighborName = next;
               neighbor = document.querySelector(`[data-view="${next}"]`);
               neighbor.classList.add('swipe-neighbor');
-              neighbor.style.top = `${window.scrollY - (viewScrollPositions[next] || 0)}px`;
+              neighbor.style.top = `${previewScrollY - (viewScrollPositions[next] || 0)}px`;
               neighbor.style.willChange = 'transform';
               neighbor.inert = true;
               neighbor.setAttribute('aria-hidden', 'true');
@@ -744,7 +760,7 @@
             if (token !== generation) return;
             // Hide the outgoing view and restore the incoming layout in the same frame.
             clearPreview();
-            if (next) activateView(next, true, restoreScroll);
+            if (next) activateView(next, true, restoreScroll, false);
           };
           if (reducedMotion.matches || !draggedView.animate) { finish(); return; }
           const animate = (view, from, to) => view.animate([
@@ -775,7 +791,7 @@
           if (event.target.closest('.week-strip, input, select, textarea, label, a, [contenteditable], [data-no-swipe]')) return;
           const touch = event.touches[0];
           if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
-          gesture = { id: touch.identifier, x: touch.clientX, y: touch.clientY, time: performance.now(), view: currentView, axis: null };
+          gesture = { id: touch.identifier, x: touch.clientX, y: touch.clientY, time: performance.now(), view: currentView, scrollY: window.scrollY, axis: null };
         }, { passive: true });
 
         main.addEventListener('touchmove', event => {
@@ -856,7 +872,7 @@
         if (!firstDay || strip.clientWidth === 0) return;
         const left = firstDay.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
         displayedWeekStart = weekStart;
-        strip.scrollTo({ left, behavior: smooth ? 'smooth' : 'auto' });
+        strip.scrollTo({ left, behavior: smooth ? 'smooth' : 'instant' });
       }
 
       function renderEventCard(event) {
@@ -916,11 +932,16 @@
         if (agendaObserver) agendaObserver.disconnect();
         const isMobile = window.matchMedia('(max-width: 780px)').matches;
         const agendaTop = isMobile ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) + 67 + document.querySelector('.agenda-summary').offsetHeight : 145;
-        agendaObserver = new IntersectionObserver(entries => {
-          if (currentView !== 'agenda' || document.querySelector('.app-main').classList.contains('is-swiping')) return;
-          const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        agendaObserver = new IntersectionObserver(() => {
+          const main = document.querySelector('.app-main');
+          if (currentView !== 'agenda' || main.classList.contains('is-swiping') || main.classList.contains('is-initializing')) return;
+          // Observer batches contain only changed entries; read the current layout
+          // so restoring a tab cannot select an arbitrary newly intersecting day.
+          const sections = [...document.querySelectorAll('#agenda-feed [data-day-date]')];
+          const focusLine = sections.length ? parseFloat(getComputedStyle(sections[0]).scrollMarginTop) || agendaTop : agendaTop;
+          const visible = sections.find(section => section.getBoundingClientRect().bottom > focusLine + 1);
           if (!visible) return;
-          const date = visible.target.dataset.dayDate;
+          const date = visible.dataset.dayDate;
           if (date !== activeAgendaDate) {
             activeAgendaDate = date;
             scrollWeekIntoView(date, true);
@@ -935,7 +956,7 @@
         document.documentElement.style.setProperty('--agenda-summary-height', `${document.querySelector('.agenda-summary').offsetHeight}px`);
         activeAgendaDate = date;
         scrollWeekIntoView(date, smooth);
-        section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+        section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'instant' });
       }
 
       function focusToday(smooth = true) { focusAgendaDate(getToday(DATA.timezone), smooth); }
@@ -955,11 +976,21 @@
         const monthLabel = monthFormatter.format(monthDate);
         const monthEvents = visibleEvents.filter(event => event.date.startsWith(monthKey));
         const courseSelection = selectedCourseNames();
-        const totalMinutes = monthEvents.reduce((sum, event) => sum + eventDuration(event), 0);
-        const ects = courseSelection.reduce((sum, course) => sum + (COURSE_ECTS[course] || 0), 0);
+        const metricsMarkup = (courses, events) => {
+          const totalMinutes = events.reduce((sum, event) => sum + eventDuration(event), 0);
+          const ects = courses.reduce((sum, course) => sum + (COURSE_ECTS[course] || 0), 0);
+          return `<span class="metric"><strong>${courses.length}</strong> courses</span><span class="metric"><strong>${ects}</strong> ECTS</span><span class="metric"><strong>${events.length}</strong> scheduled sessions</span><span class="metric"><strong>${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(totalMinutes / 60)}</strong> class hours</span>`;
+        };
         document.querySelector('#current-month-label').textContent = monthLabel;
         document.querySelector('#planner-subtitle').textContent = `${PROFILE_LABELS[state.profile]} · ${DATA.semester}`;
-        document.querySelector('#planner-metrics').innerHTML = `<span class="metric"><strong>${courseSelection.length}</strong> courses</span><span class="metric"><strong>${ects}</strong> ECTS</span><span class="metric"><strong>${monthEvents.length}</strong> scheduled sessions</span><span class="metric"><strong>${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(totalMinutes / 60)}</strong> class hours</span>`;
+        document.querySelector('#planner-metrics').innerHTML = state.profile === 'both'
+          ? PROFILE_PEOPLE.both.map(personKey => {
+            const person = PEOPLE[personKey];
+            const courses = [...new Set(DATA.courses.filter(course => person.courseIds.has(course.course_id)).map(course => course.course))];
+            const events = monthEvents.filter(event => person.courseIds.has(event.course_id));
+            return `<section class="planner-person-metrics" style="--person-color:${person.color}" aria-labelledby="planner-metrics-${personKey}"><h2 id="planner-metrics-${personKey}">${escapeHtml(person.name)}</h2><div class="planner-metrics">${metricsMarkup(courses, events)}</div></section>`;
+          }).join('')
+          : metricsMarkup(courseSelection, monthEvents);
         document.querySelector('#previous-month').disabled = plannerMonthIndex === 0;
         document.querySelector('#next-month').disabled = plannerMonthIndex === plannerMonths.length - 1;
         const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -1040,8 +1071,14 @@
           renderSettings();
           document.querySelector('#loading-state').hidden = true;
           document.querySelectorAll('[data-view]').forEach(element => { element.hidden = true; });
+          // Prepare today's Agenda position before the first visible frame, even
+          // when the app opens on another tab through a shortcut or deep link.
+          activateView('agenda', false, null, false);
           activateView(location.hash.slice(1) || 'agenda', false);
-          requestAnimationFrame(() => focusToday(false));
+          requestAnimationFrame(() => {
+            document.querySelector('.app-main').classList.remove('is-initializing');
+            setupAgendaObserver();
+          });
         } catch (error) {
           document.querySelector('#loading-state').hidden = true;
           document.querySelector('#fatal-error').hidden = false;

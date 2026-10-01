@@ -126,6 +126,34 @@ function fixture() {
     assert.equal(t.context.window.scrollY, 120);
     assert.equal(t.context.viewScrollPositions.planner, 65);
   });
+  await test('repeated round trips keep the original Agenda offset', async t => {
+    t.context.window.scrollY = 1940;
+    for (let trip = 0; trip < 4; trip++) {
+      t.start(); t.move(180);
+      // Simulate browser scroll anchoring/clamping during the temporary layout.
+      t.context.window.scrollY = 1875 - trip * 15;
+      t.end(180); await t.finish();
+      assert.equal(t.context.viewScrollPositions.agenda, 1940);
+      t.context.window.scrollY = 50;
+      t.start(90); t.move(220); t.end(220); await t.finish();
+      assert.equal(t.context.window.scrollY, 1940);
+      assert.equal(t.context.currentView, 'agenda');
+    }
+  });
+  await test('button navigation restores offsets without queued date scrolling', async t => {
+    let dateFocuses = 0;
+    t.context.focusAgendaDate = () => { dateFocuses++; };
+    t.context.window.scrollY = 1940;
+    t.context.activateView('planner');
+    t.context.activateView('agenda');
+    t.flush();
+    assert.equal(t.context.window.scrollY, 1940);
+    assert.equal(dateFocuses, 0);
+    t.context.activateView('agenda');
+    t.flush();
+    assert.equal(t.context.window.scrollY, 1940);
+    assert.equal(dateFocuses, 0);
+  });
   await test('direction reversal replaces the preview', async t => {
     t.context.activateView('planner');
     t.start(200); t.move(100);
