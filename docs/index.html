@@ -160,6 +160,7 @@
       text-transform: uppercase;
     }
     .day-heading time { color: inherit; }
+    .agenda-day.is-today .day-events { padding: 10px; border-left: 3px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary-soft); }
     .today-label { padding: 4px 7px; border-radius: 999px; color: var(--primary); background: var(--primary-soft); letter-spacing: 0; text-transform: none; }
     .day-events { display: grid; gap: 9px; }
     .empty-day { padding: 13px 15px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); background: color-mix(in srgb, var(--surface) 54%, transparent); font-size: 12px; text-align: center; }
@@ -669,7 +670,7 @@
         const byDate = Object.groupBy ? Object.groupBy(visibleEvents, event => event.date) : visibleEvents.reduce((result, event) => ((result[event.date] ||= []).push(event), result), {});
         document.querySelector('#agenda-feed').innerHTML = datesBetween(start, end).map(date => {
           const entries = byDate[date] || [];
-          return `<section class="agenda-day" id="agenda-${date}" data-day-date="${date}"><h2 class="day-heading"><time datetime="${date}">${escapeHtml(dateFormatter.format(parseDate(date)))}</time>${date === today ? '<span class="today-label">Today</span>' : ''}</h2><div class="day-events">${entries.length ? entries.map(renderEventCard).join('') : '<div class="empty-day">No classes</div>'}</div></section>`;
+          return `<section class="agenda-day${date === today ? ' is-today' : ''}" id="agenda-${date}" data-day-date="${date}"><h2 class="day-heading"><time datetime="${date}"${date === today ? ' aria-current="date"' : ''}>${escapeHtml(dateFormatter.format(parseDate(date)))}</time>${date === today ? '<span class="today-label">Today</span>' : ''}</h2><div class="day-events">${entries.length ? entries.map(renderEventCard).join('') : '<div class="empty-day">No classes</div>'}</div></section>`;
         }).join('');
         document.querySelectorAll('[data-event-id]').forEach(button => button.addEventListener('click', () => showEvent(button.dataset.eventId)));
         activeAgendaDate = activeAgendaDate && document.querySelector(`#agenda-${activeAgendaDate}`) ? activeAgendaDate : today;
