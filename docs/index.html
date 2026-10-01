@@ -83,7 +83,6 @@
 
     .app-main { position: relative; overflow-anchor: none; width: min(100%, 1360px); margin: 0 auto; padding: 0 0 calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 18px); }
     .app-main.is-initializing .view { visibility: hidden; }
-    .swipe-neighbor { position: absolute; left: 0; width: 100%; pointer-events: none; background: var(--bg); }
     .view { min-height: calc(100dvh - var(--header-height) - var(--bottom-nav-height)); }
     .loading, .fatal-error { display: grid; place-items: center; min-height: 60dvh; padding: 32px; text-align: center; color: var(--muted); }
     .fatal-error strong { display: block; margin-bottom: 8px; color: var(--danger); }
@@ -307,12 +306,16 @@
     .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
     @media (max-width: 780px) {
-      .app-main { overflow-x: clip; }
-      .view { transform: translate3d(0, 0, 0); backface-visibility: hidden; }
+      body { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom)); }
+      .app-header { flex: 0 0 auto; }
+      .app-main { display: flex; flex: 1 1 0; min-height: 0; width: 100%; margin: 0; padding: 0; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+      .app-main::-webkit-scrollbar { display: none; }
+      .view { flex: 0 0 100%; width: 100%; height: 100%; min-height: 0; padding-bottom: 18px; overflow-y: auto; overflow-x: hidden; overflow-anchor: none; overscroll-behavior-y: contain; scroll-snap-align: start; scroll-snap-stop: always; }
+      .week-bar { top: 0; background: var(--surface); backdrop-filter: none; }
       .agenda-layout { display: block; }
-      .agenda-summary { position: sticky; top: calc(var(--header-height) + 67px); z-index: 15; }
-      .day-heading { top: calc(var(--header-height) + 67px + var(--agenda-summary-height, 0px)); }
-      .agenda-day { scroll-margin-top: calc(var(--header-height) + 78px + var(--agenda-summary-height, 0px)); }
+      .agenda-summary { position: sticky; top: 67px; z-index: 15; }
+      .day-heading { top: calc(67px + var(--agenda-summary-height, 0px)); }
+      .agenda-day { scroll-margin-top: calc(78px + var(--agenda-summary-height, 0px)); }
     }
 
     @media (max-width: 520px) {
@@ -638,212 +641,92 @@
         renderAgenda(true);
       }
 
-      function activateView(view, updateHash = true, restoreScroll = null, saveScroll = true) {
+      const viewOrder = ['agenda', 'planner', 'settings'];
+      let mobileScrollTarget = null;
+
+      function activateView(view, updateHash = true, restoreScroll = null, saveScroll = true, fromScroll = false) {
         if (!pageTitles[view]) view = 'agenda';
-        if (saveScroll && view !== currentView && DATA) viewScrollPositions[currentView] = window.scrollY;
+        const mobile = window.matchMedia('(max-width: 780px)').matches;
+        const main = document.querySelector('.app-main');
+        if (saveScroll && view !== currentView && DATA) {
+          viewScrollPositions[currentView] = mobile ? document.querySelector(`[data-view="${currentView}"]`).scrollTop : window.scrollY;
+        }
         currentView = view;
-        document.querySelectorAll('[data-view]').forEach(element => { element.hidden = element.dataset.view !== view; });
+        document.querySelectorAll('[data-view]').forEach(element => {
+          const active = element.dataset.view === view;
+          // Mobile panels stay mounted in their own scroll containers throughout
+          // the gesture, including its final frame. Only accessibility state changes.
+          element.hidden = !mobile && !active;
+          element.inert = mobile && !active;
+          if (mobile && !active) element.setAttribute('aria-hidden', 'true'); else element.removeAttribute('aria-hidden');
+        });
         document.querySelectorAll('[data-view-button]').forEach(button => {
           if (button.dataset.viewButton === view) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
         });
         document.querySelector('#page-title').textContent = pageTitles[view];
         document.querySelector('#today-button').hidden = view !== 'agenda';
         if (updateHash) history.replaceState(null, '', `#${view}`);
+        const panel = document.querySelector(`[data-view="${view}"]`);
         const position = restoreScroll ?? viewScrollPositions[view];
         if (position === undefined && view === 'agenda' && DATA) {
           focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false);
-          viewScrollPositions.agenda = window.scrollY;
-        } else {
+          viewScrollPositions.agenda = mobile ? panel.scrollTop : window.scrollY;
+        } else if (!mobile) {
           window.scrollTo({ top: position ?? 0, behavior: 'instant' });
+        } else if (restoreScroll !== null) {
+          panel.scrollTo({ top: restoreScroll, behavior: 'instant' });
+        }
+        if (mobile && !fromScroll) {
+          const left = viewOrder.indexOf(view) * main.clientWidth;
+          mobileScrollTarget = Math.abs(main.scrollLeft - left) > 1 ? view : null;
+          const smooth = updateHash && !main.classList.contains('is-initializing') && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          main.scrollTo({ left, behavior: smooth ? 'smooth' : 'instant' });
         }
       }
 
       function setupViewSwipes() {
         const main = document.querySelector('.app-main');
         const mobile = window.matchMedia('(max-width: 780px)');
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-        const views = ['agenda', 'planner', 'settings'];
-        let gesture = null;
-        let suppressClickUntil = 0;
-        let transitions = [];
-        let draggedView = null;
-        let neighbor = null;
-        let neighborName = null;
-        let direction = 1;
-        let dragOffset = 0;
-        let dragFrame = null;
-        let settling = false;
-        let generation = 0;
-        let previewScrollY = 0;
-
-        function clearPreview(committedView = null) {
-          const hadPreview = Boolean(draggedView);
-          generation++;
+        let settleTimer = null;
+        const settle = () => {
+          clearTimeout(settleTimer);
+          if (!mobile.matches || !DATA || !main.clientWidth) return;
+          const index = Math.max(0, Math.min(viewOrder.length - 1, Math.round(main.scrollLeft / main.clientWidth)));
+          const view = viewOrder[index];
+          if (Math.abs(main.scrollLeft - index * main.clientWidth) > 1) return;
+          if (mobileScrollTarget && mobileScrollTarget !== view) return;
+          mobileScrollTarget = null;
           main.classList.remove('is-swiping');
-          transitions.forEach(animation => animation.cancel());
-          transitions = [];
-          if (dragFrame !== null) cancelAnimationFrame(dragFrame);
-          dragFrame = null;
-          if (draggedView) {
-            draggedView.style.removeProperty('transform');
-            draggedView.style.removeProperty('will-change');
-          }
-          if (neighbor) {
-            if (neighborName !== committedView) neighbor.hidden = true;
-            neighbor.inert = false;
-            neighbor.removeAttribute('aria-hidden');
-            neighbor.classList.remove('swipe-neighbor');
-            ['top', 'transform', 'will-change'].forEach(property => neighbor.style.removeProperty(property));
-          }
-          draggedView = neighbor = null;
-          neighborName = null;
-          dragOffset = 0;
-          settling = false;
-          if (hadPreview && !committedView) window.scrollTo({ top: previewScrollY, behavior: 'instant' });
-        }
-
-        function preparePreview(dx) {
-          const nextDirection = dx < 0 ? 1 : -1;
-          const next = views[views.indexOf(currentView) + nextDirection];
-          if (draggedView && (direction !== nextDirection || neighborName !== (next || null))) clearPreview();
-          direction = nextDirection;
-          if (!draggedView) {
-            previewScrollY = gesture?.scrollY ?? window.scrollY;
-            viewScrollPositions[currentView] = previewScrollY;
-            main.classList.add('is-swiping');
-            draggedView = document.querySelector(`[data-view="${currentView}"]`);
-            draggedView.style.willChange = 'transform';
-            if (next) {
-              neighborName = next;
-              neighbor = document.querySelector(`[data-view="${next}"]`);
-              neighbor.classList.add('swipe-neighbor');
-              neighbor.style.top = `${previewScrollY - (viewScrollPositions[next] || 0)}px`;
-              neighbor.style.transform = `translate3d(${nextDirection * main.clientWidth}px, 0, 0)`;
-              neighbor.style.willChange = 'transform';
-              neighbor.inert = true;
-              neighbor.setAttribute('aria-hidden', 'true');
-              neighbor.hidden = false;
-            }
-          }
-          const width = main.clientWidth;
-          const limit = width * .1;
-          dragOffset = next ? Math.max(-width, Math.min(width, dx)) : Math.sign(dx) * limit * (1 - Math.exp(-Math.abs(dx) / limit));
-        }
-
-        function paintPreview() {
-          if (!draggedView) return;
-          draggedView.style.transform = `translate3d(${dragOffset}px, 0, 0)`;
-          if (neighbor) neighbor.style.transform = `translate3d(${direction * main.clientWidth + dragOffset}px, 0, 0)`;
-        }
-
-        function settlePreview(commit = false) {
-          if (!draggedView) return;
-          if (dragFrame !== null) cancelAnimationFrame(dragFrame);
-          dragFrame = null;
-          paintPreview();
-          settling = true;
-          const next = commit ? neighborName : null;
-          const restoreScroll = next ? viewScrollPositions[next] || 0 : null;
-          const token = ++generation;
-          const width = main.clientWidth;
-          const finish = () => {
-            if (token !== generation) return;
-            if (!next) { clearPreview(); return; }
-            // Keep the incoming DOM and compositor layer visible while restoring
-            // its normal layout. Hiding and revealing it resets Safari's sticky layers.
-            neighbor.classList.remove('swipe-neighbor');
-            neighbor.style.removeProperty('top');
-            activateView(next, true, restoreScroll, false);
-            clearPreview(next);
-          };
-          if (reducedMotion.matches || !draggedView.animate) { finish(); return; }
-          const animate = (view, from, to) => view.animate([
-            { transform: `translate3d(${from}px, 0, 0)` },
-            { transform: `translate3d(${to}px, 0, 0)` }
-          ], { duration: 280, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'forwards' });
-          transitions = [animate(draggedView, dragOffset, next ? -direction * width : 0)];
-          if (neighbor) transitions.push(animate(neighbor, direction * width + dragOffset, next ? 0 : direction * width));
-          Promise.all(transitions.map(animation => animation.finished)).then(finish).catch(() => {});
-        }
-
-        function cancelGesture() {
-          gesture = null;
-          if (!settling) settlePreview();
-        }
-
-        function abortGesture() {
-          gesture = null;
-          clearPreview();
-        }
-
-        // Leave the date strip, form controls and screen-edge system gestures alone.
-        main.addEventListener('touchstart', event => {
-          if (settling) return;
-          abortGesture();
-          suppressClickUntil = 0;
-          if (!mobile.matches || !DATA || event.touches.length !== 1 || document.querySelector('dialog[open]')) return;
-          if (event.target.closest('.week-strip, input, select, textarea, label, a, [contenteditable], [data-no-swipe]')) return;
-          const touch = event.touches[0];
-          if (touch.clientX < 24 || touch.clientX > window.innerWidth - 24) return;
-          gesture = { id: touch.identifier, x: touch.clientX, y: touch.clientY, time: performance.now(), view: currentView, scrollY: window.scrollY, axis: null };
+          if (currentView !== view) activateView(view, true, null, true, true);
+          if (view === 'agenda') setupAgendaObserver();
+        };
+        // Native horizontal scrolling handles drag, momentum, snap-back and click
+        // cancellation without transforming or rebuilding the sticky Agenda DOM.
+        main.addEventListener('scroll', () => {
+          if (!mobile.matches || !DATA) return;
+          main.classList.add('is-swiping');
+          clearTimeout(settleTimer);
+          settleTimer = setTimeout(settle, 140);
         }, { passive: true });
-
-        main.addEventListener('touchmove', event => {
-          if (!gesture) return;
-          if (!mobile.matches || event.touches.length !== 1 || currentView !== gesture.view || document.querySelector('dialog[open]')) {
-            cancelGesture();
-            return;
-          }
-          const touch = event.touches[0];
-          const dx = touch.clientX - gesture.x;
-          const dy = touch.clientY - gesture.y;
-          if (!gesture.axis) {
-            if (Math.max(Math.abs(dx), Math.abs(dy)) < 12) return;
-            if (Math.abs(dx) <= Math.abs(dy) * 1.4) { cancelGesture(); return; }
-            gesture.axis = 'horizontal';
-          }
-          // Stop scrolling and card taps only after horizontal intent is clear.
-          if (!event.cancelable) { cancelGesture(); return; }
-          event.preventDefault();
-          suppressClickUntil = performance.now() + 500;
-          preparePreview(dx);
-          if (dragFrame === null) dragFrame = requestAnimationFrame(() => {
-            dragFrame = null;
-            paintPreview();
-          });
-        }, { passive: false });
-
-        main.addEventListener('touchend', event => {
-          const completed = gesture;
-          gesture = null;
-          if (!completed || completed.axis !== 'horizontal') { cancelGesture(); return; }
-          suppressClickUntil = performance.now() + 500;
-          if (event.cancelable) event.preventDefault();
-          if (!mobile.matches || event.touches.length || currentView !== completed.view || document.querySelector('dialog[open]')) { settlePreview(); return; }
-          const touch = [...event.changedTouches].find(item => item.identifier === completed.id);
-          if (!touch) { settlePreview(); return; }
-          const dx = touch.clientX - completed.x;
-          const dy = touch.clientY - completed.y;
-          const distance = Math.abs(dx);
-          const duration = Math.max(1, performance.now() - completed.time);
-          const threshold = Math.min(100, Math.max(56, window.innerWidth * .18));
-          if (distance <= Math.abs(dy) * 1.4 || (distance < threshold && !(distance >= 32 && distance / duration >= .45))) { settlePreview(); return; }
-          const direction = dx < 0 ? 1 : -1;
-          const next = views[views.indexOf(currentView) + direction];
-          if (!next) { settlePreview(); return; }
-          preparePreview(dx);
-          settlePreview(true);
-        }, { passive: false });
-
-        main.addEventListener('touchcancel', cancelGesture, { passive: true });
-        window.addEventListener('resize', abortGesture);
-        window.addEventListener('hashchange', abortGesture);
-        document.querySelectorAll('[data-view-button]').forEach(button => button.addEventListener('click', abortGesture, true));
-        main.addEventListener('click', event => {
-          if (performance.now() >= suppressClickUntil || event.detail === 0) return;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-        }, true);
+        main.addEventListener('scrollend', settle);
+        main.addEventListener('touchstart', () => { mobileScrollTarget = null; }, { passive: true });
+        main.addEventListener('wheel', () => { mobileScrollTarget = null; }, { passive: true });
+        document.querySelectorAll('[data-view]').forEach(panel => panel.addEventListener('scroll', () => {
+          if (mobile.matches) viewScrollPositions[panel.dataset.view] = panel.scrollTop;
+        }, { passive: true }));
+        let wasMobile = mobile.matches;
+        window.addEventListener('scroll', () => {
+          if (!mobile.matches && DATA) viewScrollPositions[currentView] = window.scrollY;
+        }, { passive: true });
+        window.addEventListener('resize', () => {
+          if (!DATA) return;
+          clearTimeout(settleTimer);
+          main.classList.remove('is-swiping');
+          const changedLayout = wasMobile !== mobile.matches;
+          wasMobile = mobile.matches;
+          activateView(currentView, false, changedLayout ? viewScrollPositions[currentView] ?? 0 : null, false);
+          setupAgendaObserver();
+        });
       }
 
       function renderWeekStrip(start, end) {
@@ -925,14 +808,15 @@
       function setupAgendaObserver() {
         if (agendaObserver) agendaObserver.disconnect();
         const isMobile = window.matchMedia('(max-width: 780px)').matches;
-        const agendaTop = isMobile ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) + 67 + document.querySelector('.agenda-summary').offsetHeight : 145;
+        const panel = document.querySelector('#agenda-view');
+        const agendaTop = isMobile ? 67 + document.querySelector('.agenda-summary').offsetHeight : 145;
         agendaObserver = new IntersectionObserver(() => {
           const main = document.querySelector('.app-main');
           if (currentView !== 'agenda' || main.classList.contains('is-swiping') || main.classList.contains('is-initializing')) return;
           // Observer batches contain only changed entries; read the current layout
           // so restoring a tab cannot select an arbitrary newly intersecting day.
           const sections = [...document.querySelectorAll('#agenda-feed [data-day-date]')];
-          const focusLine = sections.length ? parseFloat(getComputedStyle(sections[0]).scrollMarginTop) || agendaTop : agendaTop;
+          const focusLine = (isMobile ? panel.getBoundingClientRect().top : 0) + (sections.length ? parseFloat(getComputedStyle(sections[0]).scrollMarginTop) || agendaTop : agendaTop);
           const visible = sections.find(section => section.getBoundingClientRect().bottom > focusLine + 1);
           if (!visible) return;
           const date = visible.dataset.dayDate;
@@ -940,7 +824,7 @@
             activeAgendaDate = date;
             scrollWeekIntoView(date, true);
           }
-        }, { rootMargin: `-${agendaTop}px 0px ${isMobile ? '0px' : '-65%'} 0px`, threshold: 0 });
+        }, { root: isMobile ? panel : null, rootMargin: `-${agendaTop}px 0px ${isMobile ? '0px' : '-65%'} 0px`, threshold: 0 });
         document.querySelectorAll('[data-day-date]').forEach(section => agendaObserver.observe(section));
       }
 
@@ -950,7 +834,13 @@
         document.documentElement.style.setProperty('--agenda-summary-height', `${document.querySelector('.agenda-summary').offsetHeight}px`);
         activeAgendaDate = date;
         scrollWeekIntoView(date, smooth);
-        section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'instant' });
+        if (window.matchMedia('(max-width: 780px)').matches) {
+          const panel = document.querySelector('#agenda-view');
+          const margin = parseFloat(getComputedStyle(section).scrollMarginTop) || 0;
+          panel.scrollTo({ top: Math.max(0, panel.scrollTop + section.getBoundingClientRect().top - panel.getBoundingClientRect().top - margin), behavior: smooth ? 'smooth' : 'instant' });
+        } else {
+          section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'instant' });
+        }
       }
 
       function focusToday(smooth = true) { focusAgendaDate(getToday(DATA.timezone), smooth); }

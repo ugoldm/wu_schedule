@@ -8,16 +8,17 @@ const extract = (start, end) => html.slice(html.indexOf(start), html.indexOf(end
 
 function fixture(initialTab) {
   const classes = new Set(['is-initializing']);
-  const main = { classList: { contains: name => classes.has(name), remove: name => classes.delete(name), add: name => classes.add(name) } };
-  const views = ['agenda', 'planner', 'settings'].map(view => ({ dataset: { view }, hidden: true }));
+  const main = { clientWidth: 390, scrollLeft: 0, scrollTo({left}) {this.scrollLeft=left;}, classList: { contains: name => classes.has(name), remove: name => classes.delete(name), add: name => classes.add(name) } };
+  const views = ['agenda', 'planner', 'settings'].map(view => ({ dataset: { view }, hidden: true, scrollTop: 0, setAttribute() {}, removeAttribute() {}, getBoundingClientRect: () => ({top:64}) }));
   const buttons = views.map(view => ({ dataset: { viewButton: view.dataset.view }, setAttribute() {}, removeAttribute() {} }));
   const frames = [], scrolls = [], weekChanges = [], focused = [];
   const days = [
-    { dataset: { dayDate: '2026-09-30' }, getBoundingClientRect: () => ({ bottom: 240 }) },
-    { dataset: { dayDate: '2026-10-01' }, getBoundingClientRect: () => ({ bottom: 460 }) },
-    { dataset: { dayDate: '2026-10-02' }, getBoundingClientRect: () => ({ bottom: 600 }) }
+    { dataset: { dayDate: '2026-09-30' }, getBoundingClientRect: () => ({ bottom: 304 }) },
+    { dataset: { dayDate: '2026-10-01' }, getBoundingClientRect: () => ({ bottom: 524 }) },
+    { dataset: { dayDate: '2026-10-02' }, getBoundingClientRect: () => ({ bottom: 664 }) }
   ];
   const today = days[1];
+  today.getBoundingClientRect = () => ({top: 1204 - views[0].scrollTop, bottom:524});
   const summary = { offsetHeight: 80 };
   const loading = { hidden: false };
   const context = {
@@ -32,6 +33,8 @@ function fixture(initialTab) {
       querySelector(selector) {
         if (selector === '.app-main') return main;
         if (selector === '.agenda-summary') return summary;
+        const panel = views.find(view => selector === `#${view.dataset.view}-view` || selector === `[data-view="${view.dataset.view}"]`);
+        if (panel) return panel;
         if (selector === '#loading-state') return loading;
         if (selector === '#page-title') return title;
         if (selector === '#today-button') return todayButton;
@@ -63,12 +66,12 @@ function fixture(initialTab) {
   };
   const title = {};
   const todayButton = {};
-  today.scrollIntoView = options => {
+  views[0].scrollTo = options => {
     focused.push({ options, beforeReveal: classes.has('is-initializing') });
-    context.window.scrollY = 900;
+    views[0].scrollTop = options.top;
   };
   vm.createContext(context);
-  vm.runInContext(extract('      function activateView(', '      function setupViewSwipes('), context);
+  vm.runInContext(extract('      const viewOrder =', '      function setupViewSwipes('), context);
   vm.runInContext(extract('      function setupAgendaObserver(', '      function formatGenerated('), context);
   vm.runInContext(extract('      async function initialize(', '      setupViewSwipes();'), context);
   const flush = () => { while (frames.length) frames.shift()(); };
@@ -88,9 +91,10 @@ function fixture(initialTab) {
     t.flush();
     assert.equal(t.classes.has('is-initializing'), false);
     assert.equal(t.focused.length, 1, 'revealing must not initiate another scroll');
-    assert.equal(t.context.window.scrollY, tab === 'agenda' ? 900 : 0);
+    assert.equal(t.views[0].scrollTop, 900);
+    assert.equal(t.context.window.scrollY, 0);
     t.context.activateView('agenda'); t.flush();
-    assert.equal(t.context.window.scrollY, 900);
+    assert.equal(t.views[0].scrollTop, 900);
     assert.equal(t.focused.length, 1, 'returning must restore pixels without refocusing the date');
     console.log(`PASS initial ${tab}: Agenda positioned before reveal; no delayed date scroll`);
   }
