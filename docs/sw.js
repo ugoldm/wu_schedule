@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wu-operational-schedule-';
-const CACHE_NAME = `${CACHE_PREFIX}v8`;
+const CACHE_NAME = `${CACHE_PREFIX}v9`;
 const PRECACHE = [
   './index.html',
   './manifest.webmanifest',
@@ -24,6 +24,21 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-cache' }).then(response => {
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy)));
+        }
+        return response;
+      }).catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+        return await cache.match('./index.html') || Response.error();
+      })
+    );
+    return;
+  }
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then(cached => {
       if (cached) return cached;

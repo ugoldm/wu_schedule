@@ -827,6 +827,14 @@
         button.onclick = async () => { await installPrompt.prompt(); installPrompt = null; button.hidden = true; };
       });
       if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+        const hadController = Boolean(navigator.serviceWorker.controller);
+        let reloadingForUpdate = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (hadController && !reloadingForUpdate) {
+            reloadingForUpdate = true;
+            location.reload();
+          }
+        });
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {}));
       }
       initialize();
