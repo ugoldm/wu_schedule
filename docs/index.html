@@ -282,6 +282,13 @@
     .detail-value { min-width: 0; overflow-wrap: anywhere; }
     .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
+    @media (max-width: 780px) {
+      .agenda-layout { display: block; }
+      .agenda-summary { position: sticky; top: calc(var(--header-height) + 67px); z-index: 15; }
+      .day-heading { top: calc(var(--header-height) + 67px + var(--agenda-summary-height, 0px)); }
+      .agenda-day { scroll-margin-top: calc(var(--header-height) + 78px + var(--agenda-summary-height, 0px)); }
+    }
+
     @media (max-width: 520px) {
       .week-bar { padding-inline: 6px; }
       .week-strip { grid-auto-columns: calc((100% - 6px) / 7); gap: 1px; }
@@ -683,6 +690,8 @@
 
       function setupAgendaObserver() {
         if (agendaObserver) agendaObserver.disconnect();
+        const isMobile = window.matchMedia('(max-width: 780px)').matches;
+        const agendaTop = isMobile ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) + 67 + document.querySelector('.agenda-summary').offsetHeight : 145;
         agendaObserver = new IntersectionObserver(entries => {
           const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
           if (!visible) return;
@@ -691,13 +700,14 @@
             activeAgendaDate = date;
             scrollWeekIntoView(date, true);
           }
-        }, { rootMargin: '-145px 0px -65% 0px', threshold: 0 });
+        }, { rootMargin: `-${agendaTop}px 0px ${isMobile ? '0px' : '-65%'} 0px`, threshold: 0 });
         document.querySelectorAll('[data-day-date]').forEach(section => agendaObserver.observe(section));
       }
 
       function focusAgendaDate(date, smooth) {
         const section = document.querySelector(`#agenda-${date}`);
         if (!section) return;
+        document.documentElement.style.setProperty('--agenda-summary-height', `${document.querySelector('.agenda-summary').offsetHeight}px`);
         activeAgendaDate = date;
         scrollWeekIntoView(date, smooth);
         section.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
@@ -838,6 +848,13 @@
         });
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => {}));
       }
+      const summaryElement = document.querySelector('.agenda-summary');
+      const summaryResizeObserver = new ResizeObserver(() => {
+        if (!summaryElement.getClientRects().length) return;
+        document.documentElement.style.setProperty('--agenda-summary-height', `${summaryElement.offsetHeight}px`);
+        if (DATA && currentView === 'agenda') setupAgendaObserver();
+      });
+      summaryResizeObserver.observe(summaryElement);
       initialize();
     })();
   </script>
