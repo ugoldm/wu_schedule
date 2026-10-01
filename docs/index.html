@@ -81,7 +81,8 @@
     }
     .desktop-nav { display: none; }
 
-    .app-main { width: min(100%, 1360px); margin: 0 auto; padding: 0 0 calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 18px); }
+    .app-main { position: relative; width: min(100%, 1360px); margin: 0 auto; padding: 0 0 calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 18px); }
+    .swipe-neighbor { position: absolute; left: 0; width: 100%; pointer-events: none; background: var(--bg); }
     .view { min-height: calc(100dvh - var(--header-height) - var(--bottom-nav-height)); }
     .loading, .fatal-error { display: grid; place-items: center; min-height: 60dvh; padding: 32px; text-align: center; color: var(--muted); }
     .fatal-error strong { display: block; margin-bottom: 8px; color: var(--danger); }
@@ -556,6 +557,7 @@
       let eventById = {};
       let visibleEvents = [];
       let currentView = 'agenda';
+      const viewScrollPositions = {};
       let activeAgendaDate = null;
       let displayedWeekStart = null;
       let agendaObserver = null;
@@ -628,8 +630,9 @@
         renderAgenda(true);
       }
 
-      function activateView(view, updateHash = true) {
+      function activateView(view, updateHash = true, restoreScroll = null) {
         if (!pageTitles[view]) view = 'agenda';
+        if (view !== currentView && DATA) viewScrollPositions[currentView] = window.scrollY;
         currentView = view;
         document.querySelectorAll('[data-view]').forEach(element => { element.hidden = element.dataset.view !== view; });
         document.querySelectorAll('[data-view-button]').forEach(button => {
@@ -637,8 +640,8 @@
         });
         document.querySelector('#page-title').textContent = pageTitles[view];
         if (updateHash) history.replaceState(null, '', `#${view}`);
-        window.scrollTo({ top: 0, behavior: 'auto' });
-        if (view === 'agenda' && DATA) requestAnimationFrame(() => focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false));
+        window.scrollTo({ top: restoreScroll ?? 0, behavior: 'instant' });
+        if (restoreScroll === null && view === 'agenda' && DATA) requestAnimationFrame(() => focusAgendaDate(activeAgendaDate || getToday(DATA.timezone), false));
       }
 
       function setupViewSwipes() {
@@ -648,42 +651,125 @@
         const views = ['agenda', 'planner', 'settings'];
         let gesture = null;
         let suppressClickUntil = 0;
-        let transition = null;
+        let transitions = [];
         let draggedView = null;
+        let neighbor = null;
+        let neighborName = null;
+        let direction = 1;
         let dragOffset = 0;
         let dragFrame = null;
+        let settling = false;
+        let generation = 0;
+        let floatingButton = null;
 
-        function animateView(view, from) {
-          if (transition) transition.cancel();
-          if (reducedMotion.matches || !view.animate || !from) return;
-          transition = view.animate([
-            { transform: `translateX(${from}px)` },
-            { transform: 'translateX(0)' }
-          ], { duration: 300, easing: 'cubic-bezier(.22, 1, .36, 1)' });
-        }
-
-        function resetDrag(smooth = true) {
+        function clearPreview() {
+          generation++;
+          main.classList.remove('is-swiping');
+          transitions.forEach(animation => animation.cancel());
+          transitions = [];
           if (dragFrame !== null) cancelAnimationFrame(dragFrame);
           dragFrame = null;
-          if (!draggedView) return;
-          const view = draggedView;
-          const offset = dragOffset;
-          view.style.removeProperty('transform');
-          view.style.removeProperty('will-change');
-          draggedView = null;
+          if (draggedView) {
+            draggedView.style.removeProperty('transform');
+            draggedView.style.removeProperty('will-change');
+          }
+          if (neighbor) {
+            neighbor.hidden = true;
+            neighbor.inert = false;
+            neighbor.removeAttribute('aria-hidden');
+            neighbor.classList.remove('swipe-neighbor');
+            ['top', 'transform', 'will-change'].forEach(property => neighbor.style.removeProperty(property));
+          }
+          if (floatingButton) {
+            document.querySelector('[data-view="agenda"]').append(floatingButton);
+            floatingButton.hidden = false;
+            floatingButton = null;
+          }
+          draggedView = neighbor = null;
+          neighborName = null;
           dragOffset = 0;
-          if (smooth) animateView(view, offset);
+          settling = false;
+        }
+
+        function preparePreview(dx) {
+          const nextDirection = dx < 0 ? 1 : -1;
+          const next = views[views.indexOf(currentView) + nextDirection];
+          if (draggedView && (direction !== nextDirection || neighborName !== (next || null))) clearPreview();
+          direction = nextDirection;
+          if (!draggedView) {
+            main.classList.add('is-swiping');
+            draggedView = document.querySelector(`[data-view="${currentView}"]`);
+            draggedView.style.willChange = 'transform';
+            if (next) {
+              neighborName = next;
+              neighbor = document.querySelector(`[data-view="${next}"]`);
+              neighbor.classList.add('swipe-neighbor');
+              neighbor.style.top = `${window.scrollY - (viewScrollPositions[next] || 0)}px`;
+              neighbor.style.willChange = 'transform';
+              neighbor.inert = true;
+              neighbor.setAttribute('aria-hidden', 'true');
+              neighbor.hidden = false;
+            }
+            // A transformed view would otherwise move its fixed Today button offscreen.
+            if (currentView === 'agenda' || next === 'agenda') {
+              floatingButton = document.querySelector('#today-button');
+              if (floatingButton) {
+                floatingButton.hidden = currentView !== 'agenda';
+                main.append(floatingButton);
+              }
+            }
+          }
+          const width = main.clientWidth;
+          const limit = width * .1;
+          dragOffset = next ? Math.max(-width, Math.min(width, dx)) : Math.sign(dx) * limit * (1 - Math.exp(-Math.abs(dx) / limit));
+        }
+
+        function paintPreview() {
+          if (!draggedView) return;
+          draggedView.style.transform = `translateX(${dragOffset}px)`;
+          if (neighbor) neighbor.style.transform = `translateX(${direction * main.clientWidth + dragOffset}px)`;
+        }
+
+        function settlePreview(commit = false) {
+          if (!draggedView) return;
+          if (dragFrame !== null) cancelAnimationFrame(dragFrame);
+          dragFrame = null;
+          paintPreview();
+          settling = true;
+          const next = commit ? neighborName : null;
+          const restoreScroll = next ? viewScrollPositions[next] || 0 : null;
+          const token = ++generation;
+          const width = main.clientWidth;
+          const finish = () => {
+            if (token !== generation) return;
+            // Hide the outgoing view and restore the incoming layout in the same frame.
+            clearPreview();
+            if (next) activateView(next, true, restoreScroll);
+          };
+          if (reducedMotion.matches || !draggedView.animate) { finish(); return; }
+          const animate = (view, from, to) => view.animate([
+            { transform: `translateX(${from}px)` },
+            { transform: `translateX(${to}px)` }
+          ], { duration: 280, easing: 'cubic-bezier(.22, 1, .36, 1)', fill: 'forwards' });
+          transitions = [animate(draggedView, dragOffset, next ? -direction * width : 0)];
+          if (neighbor) transitions.push(animate(neighbor, direction * width + dragOffset, next ? 0 : direction * width));
+          Promise.all(transitions.map(animation => animation.finished)).then(finish).catch(() => {});
         }
 
         function cancelGesture() {
           gesture = null;
-          resetDrag();
+          if (!settling) settlePreview();
+        }
+
+        function abortGesture() {
+          gesture = null;
+          clearPreview();
         }
 
         // Leave the date strip, form controls and screen-edge system gestures alone.
         main.addEventListener('touchstart', event => {
-          cancelGesture();
-          if (transition) transition.cancel();
+          if (settling) return;
+          abortGesture();
           suppressClickUntil = 0;
           if (!mobile.matches || !DATA || event.touches.length !== 1 || document.querySelector('dialog[open]')) return;
           if (event.target.closest('.week-strip, input, select, textarea, label, a, [contenteditable], [data-no-swipe]')) return;
@@ -710,51 +796,39 @@
           if (!event.cancelable) { cancelGesture(); return; }
           event.preventDefault();
           suppressClickUntil = performance.now() + 500;
-          if (reducedMotion.matches) return;
-          if (!draggedView) {
-            draggedView = document.querySelector(`[data-view="${currentView}"]`);
-            draggedView.style.willChange = 'transform';
-          }
-          const direction = dx < 0 ? 1 : -1;
-          const hasNext = Boolean(views[views.indexOf(currentView) + direction]);
-          // Resistance keeps the first/last tab from feeling like a dead end.
-          const limit = window.innerWidth * (hasNext ? .35 : .1);
-          dragOffset = Math.sign(dx) * limit * (1 - Math.exp(-Math.abs(dx) / limit));
+          preparePreview(dx);
           if (dragFrame === null) dragFrame = requestAnimationFrame(() => {
             dragFrame = null;
-            if (draggedView) draggedView.style.transform = `translateX(${dragOffset}px)`;
+            paintPreview();
           });
         }, { passive: false });
 
         main.addEventListener('touchend', event => {
           const completed = gesture;
           gesture = null;
-          const offset = dragOffset;
-          resetDrag();
-          if (!completed || completed.axis !== 'horizontal') return;
+          if (!completed || completed.axis !== 'horizontal') { cancelGesture(); return; }
           suppressClickUntil = performance.now() + 500;
           if (event.cancelable) event.preventDefault();
-          if (!mobile.matches || event.touches.length || currentView !== completed.view || document.querySelector('dialog[open]')) return;
+          if (!mobile.matches || event.touches.length || currentView !== completed.view || document.querySelector('dialog[open]')) { settlePreview(); return; }
           const touch = [...event.changedTouches].find(item => item.identifier === completed.id);
-          if (!touch) return;
+          if (!touch) { settlePreview(); return; }
           const dx = touch.clientX - completed.x;
           const dy = touch.clientY - completed.y;
           const distance = Math.abs(dx);
           const duration = Math.max(1, performance.now() - completed.time);
           const threshold = Math.min(100, Math.max(56, window.innerWidth * .18));
-          if (distance <= Math.abs(dy) * 1.4 || (distance < threshold && !(distance >= 32 && distance / duration >= .45))) return;
+          if (distance <= Math.abs(dy) * 1.4 || (distance < threshold && !(distance >= 32 && distance / duration >= .45))) { settlePreview(); return; }
           const direction = dx < 0 ? 1 : -1;
           const next = views[views.indexOf(currentView) + direction];
-          if (!next) return;
-          activateView(next);
-          const view = document.querySelector(`[data-view="${next}"]`);
-          animateView(view, direction * Math.max(48, Math.abs(offset)));
+          if (!next) { settlePreview(); return; }
+          preparePreview(dx);
+          settlePreview(true);
         }, { passive: false });
 
         main.addEventListener('touchcancel', cancelGesture, { passive: true });
-        window.addEventListener('resize', cancelGesture);
-        window.addEventListener('hashchange', cancelGesture);
-        document.querySelectorAll('[data-view-button]').forEach(button => button.addEventListener('click', cancelGesture, true));
+        window.addEventListener('resize', abortGesture);
+        window.addEventListener('hashchange', abortGesture);
+        document.querySelectorAll('[data-view-button]').forEach(button => button.addEventListener('click', abortGesture, true));
         main.addEventListener('click', event => {
           if (performance.now() >= suppressClickUntil || event.detail === 0) return;
           event.preventDefault();
@@ -843,6 +917,7 @@
         const isMobile = window.matchMedia('(max-width: 780px)').matches;
         const agendaTop = isMobile ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-height')) + 67 + document.querySelector('.agenda-summary').offsetHeight : 145;
         agendaObserver = new IntersectionObserver(entries => {
+          if (currentView !== 'agenda' || document.querySelector('.app-main').classList.contains('is-swiping')) return;
           const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
           if (!visible) return;
           const date = visible.target.dataset.dayDate;
