@@ -328,6 +328,13 @@
       .profile-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     }
 
+    @media (min-width: 1024px) {
+      html { zoom: 1.1; }
+      .app-header { grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); }
+      .view { min-height: calc(100dvh / 1.1 - var(--header-height)); }
+      .event-dialog { max-height: min(760px, calc(100dvh / 1.1 - 24px)); }
+    }
+
     @media (min-width: 1120px) {
       .agenda-layout { grid-template-columns: 300px minmax(0, 760px); gap: 32px; }
       .section-page { padding-inline: 34px; }
