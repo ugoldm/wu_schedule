@@ -110,7 +110,7 @@
       top: var(--header-height);
       z-index: 20;
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 8px;
       align-items: center;
       padding: 9px 10px;
@@ -118,7 +118,26 @@
       background: color-mix(in srgb, var(--surface) 96%, transparent);
       backdrop-filter: blur(18px);
     }
-    .today-button { min-width: 42px; height: 48px; display: grid; place-items: center; padding: 0 8px; border: 0; border-radius: 12px; color: var(--primary); background: var(--primary-soft); font-size: 11px; font-weight: 760; cursor: pointer; }
+    .today-button {
+      position: fixed;
+      right: calc(16px + env(safe-area-inset-right));
+      bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom) + 16px);
+      z-index: 25;
+      min-width: 80px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 999px;
+      color: #fff;
+      background: #1769e0;
+      box-shadow: 0 4px 16px rgba(23, 105, 224, .3);
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+    }
+    .today-button:hover { background: #1058bf; }
     .week-strip { display: grid; grid-auto-flow: column; grid-auto-columns: calc((100% - 18px) / 7); gap: 3px; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory; scrollbar-width: none; }
     .week-strip::-webkit-scrollbar { display: none; }
     .date-button { min-width: 0; min-height: 48px; display: grid; place-items: center; gap: 1px; padding: 4px 1px; border: 0; border-radius: 11px; color: var(--muted); background: transparent; cursor: pointer; }
@@ -140,7 +159,7 @@
     .next-card strong { font-size: 17px; line-height: 1.25; }
     .next-card-meta { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; }
 
-    .agenda-feed { min-width: 0; padding: 4px 12px 40px; }
+    .agenda-feed { min-width: 0; padding: 4px 12px 100px; }
     .agenda-day { scroll-margin-top: calc(var(--header-height) + 78px); padding: 0 0 15px; }
     .day-heading {
       position: sticky;
@@ -326,13 +345,12 @@
       .app-main { padding-bottom: 30px; }
       .view { min-height: calc(100dvh - var(--header-height)); }
       .week-bar { top: var(--header-height); padding: 10px 22px; }
-      .today-button { min-width: 70px; }
       .date-button { min-height: 54px; }
       .date-button span { font-size: 10px; }
       .date-button strong { font-size: 17px; }
       .agenda-layout { grid-template-columns: minmax(230px, 290px) minmax(0, 720px); justify-content: center; gap: 24px; padding: 22px; }
       .agenda-summary { position: sticky; top: calc(var(--header-height) + 86px); align-content: start; align-self: start; padding: 0; border: 0; background: transparent; }
-      .agenda-feed { padding: 0 0 60px; }
+      .agenda-feed { padding: 0 0 100px; }
       .agenda-day { scroll-margin-top: calc(var(--header-height) + 96px); }
       .day-heading { top: calc(var(--header-height) + 76px); margin-inline: 0; padding-inline: 2px; }
       .event-card { grid-template-columns: 68px 5px minmax(0, 1fr) auto; padding: 15px 15px 15px 12px; }
@@ -387,7 +405,6 @@
 
     <section class="view" id="agenda-view" data-view="agenda" hidden>
       <div class="week-bar">
-        <button class="today-button" id="today-button" type="button">Today</button>
         <div class="week-strip" id="week-strip" aria-label="Current week"></div>
       </div>
       <div class="agenda-layout">
@@ -397,6 +414,7 @@
         </aside>
         <div class="agenda-feed" id="agenda-feed"></div>
       </div>
+      <button class="today-button" id="today-button" type="button" aria-label="Go to today">Today</button>
     </section>
 
     <section class="view section-page" id="planner-view" data-view="planner" hidden>
