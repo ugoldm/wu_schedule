@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const html = fs.readFileSync(path.join(__dirname, '../docs/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../docs/app.js'), 'utf8');
 const source = html.slice(html.indexOf('      const viewOrder ='), html.indexOf('      function renderWeekStrip('));
 
 function fixture() {
@@ -122,9 +122,10 @@ test('resizing retains the selected tab and vertical position', t => {
   assert.equal(t.context.window.scrollY, 65);
   assert.equal(t.views[0].hidden, true); assert.equal(t.views[1].hidden, false);
 });
-assert.match(html, /scroll-snap-type: x mandatory/);
-assert.match(html, /scroll-snap-align: start/);
-assert.match(html, /\.view \{[^}]*overflow-y: auto/);
+const css = fs.readFileSync(path.join(__dirname, '../docs/app.css'), 'utf8');
+assert.match(css, /scroll-snap-type: x mandatory/);
+assert.match(css, /scroll-snap-align: start/);
+assert.match(css, /\.view \{[^}]*overflow-y: auto/);
 assert.ok(!source.includes('touchmove'), 'native scrolling must handle motion without JS transforms');
 assert.ok(!source.includes('style.transform'), 'sticky panes must not change transform contexts');
 console.log(`${count} stable mobile navigation checks passed`);

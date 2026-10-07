@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(root, 'docs/app.js'), 'utf8');
 const data = JSON.parse(fs.readFileSync(path.join(root, 'docs/data/schedule.json'), 'utf8'));
 const nodes = {};
 const context = {
@@ -22,7 +22,11 @@ const context = {
   }
 };
 vm.createContext(context);
-vm.runInContext(html.slice(html.indexOf('      const PEOPLE ='), html.indexOf('      const STORAGE_KEY =')), context);
+vm.runInContext(html.slice(html.indexOf('      const PEOPLE ='), html.indexOf('      const pageTitles =')), context);
+const migration = fs.readFileSync(path.join(root, 'supabase/migrations/202610070002_semester_catalog.sql'), 'utf8');
+const presets = JSON.parse(migration.match(/'26W', '(\{"iurii"[^\n]+)'::jsonb/)[1]);
+context.testPresets = presets;
+vm.runInContext('for (const [key, person] of Object.entries(testPresets)) PEOPLE[key] = { ...person, courseIds: new Set(person.courseIds) };', context);
 vm.runInContext(html.slice(html.indexOf('      function eventIsVisible('), html.indexOf('      function setProfile(')), context);
 vm.runInContext(html.slice(html.indexOf('      function renderPlanner('), html.indexOf('      function renderSettings(')), context);
 const render = profile => {

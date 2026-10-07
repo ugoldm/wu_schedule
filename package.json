@@ -1,0 +1,22 @@
+{
+  "name": "wu-schedule",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build:vendor": "node scripts/build-vendor.cjs",
+    "version:assets": "node scripts/version-assets.cjs",
+    "test": "node --test tests/auth.test.cjs tests/database.test.cjs tests/service-worker.test.cjs && node tests/validate_agenda_position.cjs && node tests/validate_planner_metrics.cjs && node tests/validate_swipe_navigation.cjs && python3 tests/validate_agenda_data.py",
+    "test:browser": "playwright test",
+    "configure:auth": "node scripts/configure-auth.cjs",
+    "prepare:owner": "node scripts/prepare-owner.cjs",
+    "prepare:setup": "node scripts/prepare-setup.cjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.63.0",
+    "esbuild": "0.28.2"
+  }
+}

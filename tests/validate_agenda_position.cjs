@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const html = fs.readFileSync(path.join(__dirname, '../docs/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../docs/app.js'), 'utf8');
 const extract = (start, end) => html.slice(html.indexOf(start), html.indexOf(end));
 
 function fixture(initialTab) {
@@ -26,6 +26,9 @@ function fixture(initialTab) {
     pageTitles: { agenda: 'My schedule', planner: 'Semester planner', settings: 'Settings' },
     REQUIRED_COURSES: new Set(), state: {}, eventById: {}, courseNames: [], groupsByCourse: {},
     plannerMonths: [], plannerMonthIndex: 0,
+    account: null, localStorage: {},
+    accountInfo: {}, receiveAccount() {}, renderAccount() {},
+    WUAccount: { createController: () => ({ snapshot: () => ({}), start: async () => {} }) },
     location: { hash: initialTab ? `#${initialTab}` : '' },
     history: { replaceState() {} },
     document: {
@@ -49,7 +52,7 @@ function fixture(initialTab) {
       }
     },
     window: {
-      scrollY: 0, matchMedia: () => ({ matches: true }),
+      WU_AUTH_CONFIG: {}, scrollY: 0, matchMedia: () => ({ matches: true }),
       scrollTo(options) { scrolls.push(options); this.scrollY = options.top; }
     },
     fetch: async () => ({ ok: true, json: async () => ({ timezone: 'Europe/Vienna', events: [{ id: 'test', date: '2026-10-01' }], courses: [] }) }),
