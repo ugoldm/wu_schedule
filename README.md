@@ -161,9 +161,13 @@ they verify isolation, rejected owner-profile access, invalid course choices,
 and optimistic concurrency. Browser tests cover guest and signed-in interfaces,
 owner presets, mobile callbacks, and an OAuth request from the real SDK.
 
-Browser account responses are mocked for reproducibility. **A live Google login,
-deployed Supabase policies, and installed-PWA return from Google still need to be
-checked with the actual configured services before production use.**
+Browser account responses are mocked for reproducibility. A manual live check on
+2026-10-07 in desktop Chrome verified Google sign-in from the local preview,
+return to the application, initial plan saving, the administrative owner grant,
+and persistence of Both after reloading against the configured Supabase project.
+Google is enabled, Email is disabled, and new-user registration is enabled.
+Live isolation between two accounts, the deployed GitHub Pages callback, and
+installed-PWA return from Google still need to be checked before production use.
 
 ## Working branches
 
