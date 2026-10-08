@@ -139,9 +139,12 @@
           ? 'Signed in with Google'
           : info.enabled ? 'Sign in with Google to save your schedule across devices.' : 'You can plan on this device. Google sign-in will be available once account setup is complete.';
         const labels = { local: 'Saved on this device', loading: 'Loading your schedule…', pending: 'Waiting to save…',
-          saving: 'Saving…', saved: 'Saved to your account', offline: 'Offline', conflict: 'Choose a schedule version',
+          saving: 'Saving…', saved: '', offline: 'Offline', conflict: 'Choose a schedule version',
           error: 'Could not sync', 'signing-in': 'Opening Google…', 'signing-out': 'Signing out…' };
-        document.querySelector('#save-status').textContent = info.message || labels[info.status] || '';
+        const saveStatus = document.querySelector('#save-status');
+        saveStatus.textContent = info.message || labels[info.status] || '';
+        saveStatus.hidden = !saveStatus.textContent;
+        saveStatus.dataset.syncStatus = info.status;
         const busy = info.locked || ['loading', 'signing-in', 'signing-out'].includes(info.status);
         const button = (action, label, disabled = false, primary = false) => `<button class="button${primary ? ' button-primary' : ''}" type="button" data-account-action="${action}"${disabled ? ' disabled' : ''}>${label}</button>`;
         let actions = info.user ? button('sign-out', 'Sign out', busy) : button('sign-in', 'Continue with Google', !info.enabled || busy, true);

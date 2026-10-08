@@ -50,7 +50,8 @@ test('unconfigured app supports a guest plan and keeps personal presets hidden',
 test('ordinary accounts edit and sync their own courses without owner profiles', async ({ page }) => {
   await fakeAccount(page);
   await page.goto('/index.html#settings');
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
   await expect(page.locator('#header-account')).toBeHidden();
   await expect(page.locator('#account-description')).toHaveText('Signed in with Google');
   await expect(page.getByRole('heading', { name: 'Schedule', exact: true })).toHaveCount(0);
@@ -58,7 +59,8 @@ test('ordinary accounts edit and sync their own courses without owner profiles',
   await expect(page.locator('#profile-grid')).toHaveCount(0);
   await page.locator('.course-checkbox[value="Data Management"]').check();
   await page.locator('.group-button[data-course="Data Management"][data-group="B"]').click();
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
   expect(await page.evaluate(() => window.__remote.plan.selected_course_ids)).toContain('2463');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.locator('#account-title')).toHaveText('Your account');
@@ -71,7 +73,8 @@ test('owner retains Iurii, Anna and Both with correct courses and separate total
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await fakeAccount(page, true);
   await page.goto('/index.html#settings');
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
   await expect(page.locator('#profile-select')).toBeVisible();
   await expect(page.locator('#profile-select option')).toHaveText(['Iurii', 'Anna', 'Both', 'Custom']);
   await page.locator('#profile-select').selectOption('both');
@@ -97,7 +100,8 @@ test('mobile Google callback is consumed before tab navigation', async ({ page }
   await page.setViewportSize({ width: 390, height: 844 });
   await fakeAccount(page, true);
   await page.goto('/index.html?code=google-code#settings');
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
   await expect(page).toHaveURL(/index\.html#settings$/);
   expect(await page.evaluate(() => window.__requests.some(item => item.code === 'google-code'))).toBe(true);
   await page.locator('#profile-select').selectOption('both');
@@ -111,13 +115,15 @@ test('mobile Google callback is consumed before tab navigation', async ({ page }
 test('a cloud conflict offers explicit choices instead of overwriting another device', async ({ page }) => {
   await fakeAccount(page);
   await page.goto('/index.html#settings');
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
   await page.evaluate(() => { window.__remote.plan.revision = 7; });
   await page.locator('.course-checkbox[value="Data Management"]').check();
   await expect(page.getByRole('button', { name: 'Use cloud schedule', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Use cloud schedule', exact: true }).click();
   await expect(page.locator('.course-checkbox[value="Data Management"]')).not.toBeChecked();
-  await expect(page.locator('#save-status')).toHaveText('Saved to your account');
+  await expect(page.locator('#save-status')).toHaveAttribute('data-sync-status', 'saved');
+  await expect(page.locator('#save-status')).toBeHidden();
 });
 
 test('the real Supabase SDK starts Google OAuth with a PKCE challenge', async ({ page }) => {
