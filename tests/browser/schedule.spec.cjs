@@ -34,7 +34,7 @@ test('unconfigured app supports a guest plan and keeps personal presets hidden',
     "window.WU_AUTH_CONFIG = {supabaseUrl:'',supabasePublishableKey:'',semesterCode:'26W'};" }));
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/index.html#settings');
-  await expect(page.locator('#profile-grid')).toContainText('My schedule');
+  await expect(page.locator('#profile-grid')).toHaveCount(0);
   await expect(page.locator('#profile-select')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
   await page.locator('.course-checkbox[value="Data Management"]').check();
@@ -51,13 +51,18 @@ test('ordinary accounts edit and sync their own courses without owner profiles',
   await fakeAccount(page);
   await page.goto('/index.html#settings');
   await expect(page.locator('#save-status')).toHaveText('Saved to your account');
-  await expect(page.locator('#profile-grid')).not.toContainText('Iurii');
+  await expect(page.locator('#header-account')).toBeHidden();
+  await expect(page.locator('#account-description')).toHaveText('Signed in with Google');
+  await expect(page.getByRole('heading', { name: 'Schedule', exact: true })).toHaveCount(0);
+  await expect(page.locator('#data-facts .data-fact > span')).toHaveText(['Semester', 'Last update', 'Timezone']);
+  await expect(page.locator('#profile-grid')).toHaveCount(0);
   await page.locator('.course-checkbox[value="Data Management"]').check();
   await page.locator('.group-button[data-course="Data Management"][data-group="B"]').click();
   await expect(page.locator('#save-status')).toHaveText('Saved to your account');
   expect(await page.evaluate(() => window.__remote.plan.selected_course_ids)).toContain('2463');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.locator('#account-title')).toHaveText('Your account');
+  await expect(page.locator('#header-account')).toBeVisible();
   await expect(page.locator('.course-checkbox[value="Data Management"]')).not.toBeChecked();
   expect(await page.evaluate(() => localStorage.getItem('wu-schedule-account-v2:test-user:26W'))).toBeNull();
 });
@@ -84,7 +89,7 @@ test('owner retains Iurii, Anna and Both with correct courses and separate total
   await expect(page.locator('.course-checkbox[value="Data Management"]')).toBeEnabled();
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.locator('#profile-select')).toBeHidden();
-  await expect(page.locator('#profile-grid')).not.toContainText('Iurii');
+  await expect(page.locator('#profile-grid')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

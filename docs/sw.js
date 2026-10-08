@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'wu-operational-schedule-';
-const CACHE_NAME = `${CACHE_PREFIX}a8d3b18ba5dbd7a8`;
+const CACHE_NAME = `${CACHE_PREFIX}9720fecaaa6f6cb8`;
 const PRECACHE = [
   './index.html',
   './app.css',

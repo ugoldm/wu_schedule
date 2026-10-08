@@ -136,7 +136,7 @@
         const info = accountInfo;
         document.querySelector('#account-title').textContent = info.user ? info.user.name : 'Your account';
         document.querySelector('#account-description').textContent = info.user
-          ? 'Signed in with Google. Your schedule is private to your account.'
+          ? 'Signed in with Google'
           : info.enabled ? 'Sign in with Google to save your schedule across devices.' : 'You can plan on this device. Google sign-in will be available once account setup is complete.';
         const labels = { local: 'Saved on this device', loading: 'Loading your schedule…', pending: 'Waiting to save…',
           saving: 'Saving…', saved: 'Saved to your account', offline: 'Offline', conflict: 'Choose a schedule version',
@@ -150,9 +150,9 @@
         if (info.importCandidate) actions += '<p>You also have a schedule saved before signing in. Keep your cloud schedule or replace it with this device’s selection.</p>' + button('import', 'Use device selection') + button('dismiss-import', 'Keep cloud selection');
         document.querySelector('#account-actions').innerHTML = actions;
         const headerButton = document.querySelector('#header-account');
-        headerButton.textContent = info.user ? 'Account' : 'Sign in';
+        headerButton.textContent = 'Sign in';
         headerButton.disabled = !info.user && (!info.enabled || busy);
-        headerButton.hidden = info.owner;
+        headerButton.hidden = Boolean(info.user);
         const select = document.querySelector('#profile-select');
         select.hidden = !info.owner; select.disabled = busy;
       }
@@ -439,17 +439,7 @@
         const profiles = availableProfiles();
         document.querySelector('#profile-select').innerHTML = profiles.map(profile => `<option value="${profile}">${PROFILE_LABELS[profile]}</option>`).join('');
         document.querySelector('#profile-select').value = state.profile;
-        const profileDetails = {
-          iurii: `${PEOPLE.iurii?.courseIds.size || 0} course groups`,
-          anna: `${PEOPLE.anna?.courseIds.size || 0} course groups`,
-          both: 'Combined schedules',
-          custom: 'Manual selection'
-        };
-        document.querySelector('#profile-grid').innerHTML = profiles.map(profile => `<button class="profile-card" type="button" data-profile="${profile}" aria-pressed="${state.profile === profile}"${accountInfo.locked ? ' disabled' : ''}><strong>${PROFILE_LABELS[profile]}</strong><span>${profileDetails[profile]}</span></button>`).join('');
-        document.querySelector('#profile-description').textContent = accountInfo.owner ? 'Choose Iurii, Anna, Both, or edit your Custom schedule.' : 'Your selected courses appear in Agenda and Planner.';
         document.querySelector('#courses-description').textContent = accountInfo.owner ? 'Select Custom to edit your courses. Required courses remain enabled.' : 'Choose your course groups. Required courses remain enabled.';
-        document.querySelectorAll('[data-profile]').forEach(button => button.addEventListener('click', () => setProfile(button.dataset.profile)));
-        document.querySelector('#selected-course-summary').innerHTML = selectedCourseNames().sort().map(course => `<span class="selected-course">${escapeHtml(course)}${REQUIRED_COURSES.has(course) ? ' · required' : ''}</span>`).join('');
         const editable = state.profile === 'custom' && !accountInfo.locked;
         const presetIds = state.profile === 'custom' ? null : new Set(PROFILE_PEOPLE[state.profile].flatMap(key => [...PEOPLE[key].courseIds]));
         document.querySelector('#course-list').innerHTML = courseNames.map((course, index) => {
@@ -469,7 +459,7 @@
           state.groups[button.dataset.course] = button.dataset.group;
           saveState(); updateVisibleEvents(); renderSettings(); renderPlanner(); renderAgenda(true);
         }));
-        document.querySelector('#data-facts').innerHTML = `<div class="data-fact"><span>Semester</span><strong>${escapeHtml(DATA.semester)}</strong></div><div class="data-fact"><span>Generated</span><strong>${escapeHtml(formatGenerated(DATA.generated))}</strong></div><div class="data-fact"><span>Events</span><strong>${DATA.events.length}</strong></div><div class="data-fact"><span>Course groups</span><strong>${DATA.courses.length}</strong></div><div class="data-fact"><span>Timezone</span><strong>${escapeHtml(DATA.timezone)}</strong></div><div class="data-fact"><span>Live updates</span><strong>Not included in MVP</strong></div>`;
+        document.querySelector('#data-facts').innerHTML = `<div class="data-fact"><span>Semester</span><strong>${escapeHtml(DATA.semester)}</strong></div><div class="data-fact"><span>Last update</span><strong>${escapeHtml(formatGenerated(DATA.generated))}</strong></div><div class="data-fact"><span>Timezone</span><strong>${escapeHtml(DATA.timezone)}</strong></div>`;
       }
 
       function showEvent(id) {
