@@ -138,7 +138,7 @@
         document.querySelector('#account-description').textContent = info.user
           ? 'Signed in with Google'
           : info.enabled ? 'Sign in with Google to save your schedule across devices.' : 'You can plan on this device. Google sign-in will be available once account setup is complete.';
-        const labels = { local: 'Saved on this device', loading: 'Loading your schedule…', pending: 'Waiting to save…',
+        const labels = { local: 'Now courses selection is saved on the device', loading: 'Loading your schedule…', pending: 'Waiting to save…',
           saving: 'Saving…', saved: '', offline: 'Offline', conflict: 'Choose a schedule version',
           error: 'Could not sync', 'signing-in': 'Opening Google…', 'signing-out': 'Signing out…' };
         const saveStatus = document.querySelector('#save-status');
