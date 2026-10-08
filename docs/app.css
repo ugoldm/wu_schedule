@@ -22,7 +22,8 @@
     }
 
     .account-controls, .account-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-    .account-controls { justify-self: end; }
+    .account-controls { justify-self: end; min-width: 0; max-width: 100%; }
+    .account-controls .profile-select { max-width: 100%; }
     .account-actions p { flex-basis: 100%; }
     .save-status { min-height: 1.5em; color: var(--primary); }
     button:disabled { cursor: default; opacity: .6; }
@@ -43,7 +44,7 @@
       z-index: 30;
       min-height: var(--header-height);
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
       align-items: center;
       gap: 12px;
       padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
@@ -323,7 +324,7 @@
 
     @media (min-width: 781px) {
       :root { --header-height: 76px; --bottom-nav-height: 0px; }
-      .app-header { grid-template-columns: minmax(220px, 1fr) auto minmax(220px, 1fr); padding: 14px 24px; }
+      .app-header { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding: 14px 24px; }
       .brand-copy { display: block; }
       .page-title { display: none; }
       .profile-select {
@@ -367,7 +368,6 @@
 
     @media (min-width: 1024px) {
       html { zoom: 1.1; }
-      .app-header { grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); }
       .view { min-height: calc(100dvh / 1.1 - var(--header-height)); }
       .event-dialog { max-height: min(760px, calc(100dvh / 1.1 - 24px)); }
     }
