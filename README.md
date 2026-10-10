@@ -171,6 +171,7 @@ installed-PWA return from Google still need to be checked before production use.
 
 ## Working branches
 
-The Google integration is developed on `codex/google-auth`. Continue development
-on an appropriate separate feature branch; do not make future changes directly
-on the published/default branch without the owner's explicit instruction.
+Make changes on the current Git branch by default, including the published/default
+branch. Create a separate branch or switch branches only when the owner explicitly
+requests it for the specific task. Branch instructions from earlier tasks do not
+authorize creating or switching branches for later tasks.
