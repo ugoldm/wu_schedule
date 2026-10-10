@@ -62,7 +62,7 @@ function fixture() {
   vm.createContext(context); vm.runInContext(source + '\nsetupViewSwipes(); activateView("agenda", false);', context);
   const scroll = left => { main.scrollLeft = left; mainHandlers.scroll(); };
   const end = () => mainHandlers.scrollend();
-  return { context, views, main, mainHandlers, windowHandlers, buttons, today, mobile, timers, scroll, end, observerSetups: () => observerSetups };
+  return { context, views, main, mainHandlers, windowHandlers, buttons, title, today, mobile, timers, scroll, end, observerSetups: () => observerSetups };
 }
 let count = 0;
 function test(name, run) { run(fixture()); count++; console.log(`PASS ${name}`); }
@@ -108,11 +108,37 @@ test('button navigation moves only the horizontal container', t => {
   assert.equal(t.views[0].scrollTop, 1940);
   assert.equal(t.views[0].scrolls.length, verticalScrolls);
 });
+test('swipe updates title and active tab before scroll settlement, including reversal', t => {
+  t.mainHandlers.touchstart(); t.scroll(190);
+  assert.equal(t.title.textContent, 'My schedule');
+  assert.equal(t.buttons[0].getAttribute('aria-current'), 'page');
+  t.scroll(200);
+  assert.equal(t.title.textContent, 'Semester planner');
+  assert.equal(t.buttons[1].getAttribute('aria-current'), 'page');
+  assert.equal(t.buttons[0].getAttribute('aria-current'), undefined);
+  assert.equal(t.context.hash, '#planner');
+  assert.equal(t.main.classList.contains('is-swiping'), true);
+  t.scroll(590);
+  assert.equal(t.title.textContent, 'Settings');
+  assert.equal(t.buttons[2].getAttribute('aria-current'), 'page');
+  t.scroll(580);
+  assert.equal(t.title.textContent, 'Semester planner');
+  assert.equal(t.buttons[1].getAttribute('aria-current'), 'page');
+  t.scroll(190);
+  assert.equal(t.title.textContent, 'My schedule');
+  assert.equal(t.buttons[0].getAttribute('aria-current'), 'page');
+  assert.equal(t.today.hidden, false);
+  assert.ok(t.views.every(view => view.scrolls.length === 0));
+  assert.equal(t.views[0].scrollTop, 1940);
+});
 test('scroll settlement waits for a snapped page and supports the timer fallback', t => {
   t.mainHandlers.touchstart(); t.scroll(200); t.end();
-  assert.equal(t.context.currentView, 'agenda');
+  assert.equal(t.context.currentView, 'planner');
+  assert.equal(t.main.classList.contains('is-swiping'), true);
+  assert.equal(t.observerSetups(), 0);
   t.scroll(390); for (const callback of [...t.timers.values()]) callback();
   assert.equal(t.context.currentView, 'planner');
+  assert.equal(t.main.classList.contains('is-swiping'), false);
 });
 test('resizing retains the selected tab and vertical position', t => {
   t.context.activateView('planner'); t.views[1].scrollTop = 65; t.views[1].handlers.scroll();

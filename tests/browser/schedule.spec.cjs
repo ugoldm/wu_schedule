@@ -112,6 +112,38 @@ test('mobile Google callback is consumed before tab navigation', async ({ page }
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
 
+test('mobile title and bottom tab follow the visible panel before scrolling ends', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await fakeAccount(page);
+  await page.goto('/index.html#agenda');
+  await expect(page.locator('#app-main')).not.toHaveClass(/is-initializing/);
+  const feedback = await page.evaluate(() => new Promise(resolve => {
+    const main = document.querySelector('#app-main');
+    const agenda = document.querySelector('[data-view="agenda"]');
+    const originalTop = agenda.scrollTop;
+    let duringScroll = null;
+    const onScroll = () => {
+      if (main.scrollLeft <= main.clientWidth / 2 || duringScroll) return;
+      duringScroll = {
+        title: document.querySelector('#page-title').textContent,
+        tab: document.querySelector('.bottom-nav [aria-current="page"]').dataset.viewButton,
+        agendaTop: agenda.scrollTop,
+        originalTop
+      };
+    };
+    main.addEventListener('scroll', onScroll);
+    main.addEventListener('scrollend', () => {
+      main.removeEventListener('scroll', onScroll);
+      resolve(duringScroll);
+    }, { once: true });
+    main.scrollTo({ left: main.clientWidth, behavior: 'smooth' });
+  }));
+  expect(feedback).not.toBeNull();
+  expect(feedback.title).toBe('Semester planner');
+  expect(feedback.tab).toBe('planner');
+  expect(feedback.agendaTop).toBe(feedback.originalTop);
+});
+
 test('a cloud conflict offers explicit choices instead of overwriting another device', async ({ page }) => {
   await fakeAccount(page);
   await page.goto('/index.html#settings');

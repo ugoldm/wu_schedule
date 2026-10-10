@@ -250,6 +250,13 @@
         main.addEventListener('scroll', () => {
           if (!mobile.matches || !DATA) return;
           main.classList.add('is-swiping');
+          // Follow the panel occupying most of the viewport during a gesture.
+          // Button navigation keeps its selected destination through intermediate panels.
+          if (!mobileScrollTarget && main.clientWidth) {
+            const index = Math.max(0, Math.min(viewOrder.length - 1, Math.round(main.scrollLeft / main.clientWidth)));
+            const view = viewOrder[index];
+            if (currentView !== view) activateView(view, true, null, true, true);
+          }
           clearTimeout(settleTimer);
           settleTimer = setTimeout(settle, 140);
         }, { passive: true });
